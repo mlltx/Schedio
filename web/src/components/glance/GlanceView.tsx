@@ -2,16 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { getScopes, getGlanceView, type ScopeStatus, type TimeWindow } from "@/model";
+import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { TimeWindowPicker } from "./TimeWindowPicker";
 import { ExceptionList } from "./ExceptionList";
 import { DemoControls } from "./DemoControls";
+import { TenantSwitcher } from "./TenantSwitcher";
 
 const scopes = getScopes();
 const teamScopes = scopes.filter((s) => s.kind === "team");
 
 export function GlanceView() {
+  const tenant = useTenantConfig();
   const [selectedScopeId, setSelectedScopeId] = useState("all");
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("since_midnight");
   const [reachabilityOverrides, setReachabilityOverrides] = useState<Record<string, boolean>>({});
@@ -22,10 +25,13 @@ export function GlanceView() {
   const scopeStatuses = useMemo(() => {
     const map: Record<string, ScopeStatus> = {};
     for (const scope of scopes) {
-      map[scope.id] = getGlanceView(scope.id, timeWindow, { reachabilityOverrides });
+      map[scope.id] = getGlanceView(scope.id, timeWindow, {
+        reachabilityOverrides,
+        terms: tenant.terminology,
+      });
     }
     return map;
-  }, [timeWindow, reachabilityOverrides]);
+  }, [timeWindow, reachabilityOverrides, tenant.terminology]);
 
   const view = scopeStatuses[selectedScopeId];
 
@@ -39,10 +45,14 @@ export function GlanceView() {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <span className="text-sm font-semibold tracking-widest text-zinc-400 uppercase dark:text-zinc-500">
-          Schedio
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <span className="truncate text-sm font-semibold tracking-widest text-zinc-400 uppercase dark:text-zinc-500">
+          {tenant.brand.productName}
         </span>
+        <TenantSwitcher />
+      </div>
+
+      <div className="mb-6 overflow-x-auto">
         <TimeWindowPicker value={timeWindow} onChange={setTimeWindow} />
       </div>
 
@@ -57,7 +67,11 @@ export function GlanceView() {
         <HeadlineBanner view={view} />
       </div>
 
-      <ExceptionList exceptions={view.exceptions} onOutageClick={setSelectedScopeId} />
+      <ExceptionList
+        exceptions={view.exceptions}
+        heading={tenant.copy.exceptionsHeading}
+        onOutageClick={setSelectedScopeId}
+      />
 
       <DemoControls
         teamScopes={teamScopes}

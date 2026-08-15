@@ -55,6 +55,20 @@ onboarding open this and understand system health in ten seconds?
   in human terms. Progressive disclosure for technical detail — logs, code,
   configs are available but never front-and-center.
 
+- **White-label by design, from the start.** A team should be able to make
+  Schedio look and read like theirs — their name, their color, their words
+  for "job" or "run" — without forking the codebase or hand-editing
+  component strings. Branding and terminology are configuration, injected
+  through one boundary, the same way a connector injects data through the
+  model boundary. If adding a feature means a new hardcoded string in a
+  component, ask whether it belongs in that config instead.
+
+  This has a limit: the *severity* palette (healthy/critical/etc.) stays
+  fixed by default. Comprehension depends on color meaning the same thing
+  everywhere a team might look at Schedio together — a color system that
+  changes per tenant is a worse product than one brand accent that does.
+  Brand color styles the chrome; it doesn't get to relabel what "red" means.
+
 - **Read-first, write-second.** Nail visualization, monitoring, and trust
   before tackling triggering or editing runs through the UI. Writes, when
   they arrive, get proxied back to the native engine through the same model

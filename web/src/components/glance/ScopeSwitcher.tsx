@@ -24,9 +24,10 @@ export function ScopeSwitcher({
             type="button"
             onClick={() => onSelect(scope.id)}
             aria-pressed={isSelected}
+            style={isSelected ? { backgroundColor: "var(--brand-primary)", borderColor: "var(--brand-primary)", color: "var(--brand-primary-foreground)" } : undefined}
             className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
               isSelected
-                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                ? ""
                 : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700"
             }`}
           >

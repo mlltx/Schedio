@@ -6,6 +6,24 @@
  */
 
 // ---------------------------------------------------------------------------
+// Terminology: the nouns a tenant uses for the things the model tracks.
+// This lives here, not in a UI config module, because compute.ts's copy
+// generation is what actually consumes it — the model owns turning state
+// into plain language, so it owns the vocabulary that language is built
+// from. A tenant-branding layer imports this type; the model never imports
+// from one.
+// ---------------------------------------------------------------------------
+
+export interface Terminology {
+  job: string;
+  jobs: string;
+  run: string;
+  runs: string;
+}
+
+export const DEFAULT_TERMINOLOGY: Terminology = { job: "job", jobs: "jobs", run: "run", runs: "runs" };
+
+// ---------------------------------------------------------------------------
 // Raw model: what a connector reports. Internal to the model layer — the UI
 // never sees these types directly, only the computed views below.
 // ---------------------------------------------------------------------------

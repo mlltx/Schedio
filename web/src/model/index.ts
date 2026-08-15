@@ -5,8 +5,10 @@ import type {
   Run,
   Scope,
   ScopeStatus,
+  Terminology,
   TimeWindow,
 } from "./types";
+import { DEFAULT_TERMINOLOGY } from "./types";
 import { SCOPES } from "./seed-data";
 import { fetchConnectorSnapshot, getExpectedRunTimes, type ConnectorSnapshot } from "./connector";
 import {
@@ -37,9 +39,11 @@ export type {
   Scope,
   ScopeStatus,
   Severity,
+  Terminology,
   TimeWindow,
   TrendPoint,
 } from "./types";
+export { DEFAULT_TERMINOLOGY } from "./types";
 
 export function getScopes(): Scope[] {
   return SCOPES;
@@ -57,7 +61,7 @@ function buildDependentsMap(jobs: Job[]): Map<string, string[]> {
   return map;
 }
 
-function classifyAllJobs(snapshot: ConnectorSnapshot, now: Date): Map<string, JobStatus> {
+function classifyAllJobs(snapshot: ConnectorSnapshot, now: Date, terms: Terminology): Map<string, JobStatus> {
   const dependentsMap = buildDependentsMap(snapshot.jobs);
 
   const withoutUpstream = new Map<string, JobStatus>();
@@ -71,6 +75,7 @@ function classifyAllJobs(snapshot: ConnectorSnapshot, now: Date): Map<string, Jo
         now,
         dependentNames: dependentsMap.get(job.id) ?? [],
         failedUpstreamNames: [],
+        terms,
       }),
     );
   }
@@ -92,6 +97,7 @@ function classifyAllJobs(snapshot: ConnectorSnapshot, now: Date): Map<string, Jo
         now,
         dependentNames: dependentsMap.get(job.id) ?? [],
         failedUpstreamNames,
+        terms,
       }),
     );
   }
@@ -103,12 +109,15 @@ export interface GlanceViewOptions {
   reachabilityOverrides?: Record<string, boolean>;
   /** Injectable for testing; defaults to the real current time. */
   now?: Date;
+  /** The tenant's vocabulary for "job"/"run"/etc. Defaults to Schedio's own. */
+  terms?: Terminology;
 }
 
 export function getGlanceView(scopeId: string, window: TimeWindow, options: GlanceViewOptions = {}): ScopeStatus {
   const now = options.now ?? new Date();
+  const terms = options.terms ?? DEFAULT_TERMINOLOGY;
   const snapshot = fetchConnectorSnapshot(now, options.reachabilityOverrides ?? {});
-  const statusMap = classifyAllJobs(snapshot, now);
+  const statusMap = classifyAllJobs(snapshot, now, terms);
 
   const scope = SCOPES.find((s) => s.id === scopeId) ?? SCOPES[0];
   const scopeJobs =
@@ -145,7 +154,7 @@ export function getGlanceView(scopeId: string, window: TimeWindow, options: Glan
           scopeId: id,
           severity: "outage",
           headline: "Can't confirm status",
-          detail: `We lost contact with ${name}'s data source ${formatRelative(snapshot.lastSyncedAt, now)}. Its jobs aren't included in the counts above until this reconnects.`,
+          detail: `We lost contact with ${name}'s data source ${formatRelative(snapshot.lastSyncedAt, now)}. Its ${terms.jobs} aren't included in the counts above until this reconnects.`,
           blocksDownstream: [],
           baseline: { failureRatePercent: 0, isTypicalToday: true },
           hasHistory: true,
@@ -179,6 +188,7 @@ export function getGlanceView(scopeId: string, window: TimeWindow, options: Glan
     healthyCount,
     trendCopy,
     lastSyncedRelative,
+    terms,
     allExceptions.filter((e) => e.severity === "critical"),
   );
 
@@ -201,11 +211,12 @@ export function getGlanceView(scopeId: string, window: TimeWindow, options: Glan
 
 export function getJobDetail(jobId: string, options: GlanceViewOptions = {}): JobDetailView | undefined {
   const now = options.now ?? new Date();
+  const terms = options.terms ?? DEFAULT_TERMINOLOGY;
   const snapshot = fetchConnectorSnapshot(now, options.reachabilityOverrides ?? {});
   const job = snapshot.jobs.find((j) => j.id === jobId);
   if (!job) return undefined;
 
-  const statusMap = classifyAllJobs(snapshot, now);
+  const statusMap = classifyAllJobs(snapshot, now, terms);
   const status = statusMap.get(jobId)!;
   const jobsById = new Map(snapshot.jobs.map((j) => [j.id, j]));
   const runs = (snapshot.runsByJobId.get(jobId) ?? [])

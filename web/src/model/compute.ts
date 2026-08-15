@@ -4,6 +4,7 @@ import type {
   JobStatus,
   Run,
   Severity,
+  Terminology,
   TimeWindow,
   TrendPoint,
 } from "./types";
@@ -84,6 +85,7 @@ interface ClassifyInput {
   dependentNames: string[];
   /** Plain names of upstream jobs (from this job's own dependsOn) currently failed/critical. */
   failedUpstreamNames: string[];
+  terms: Terminology;
 }
 
 export function classifyJob({
@@ -92,6 +94,7 @@ export function classifyJob({
   now,
   dependentNames,
   failedUpstreamNames,
+  terms,
 }: ClassifyInput): JobStatus {
   const base = {
     jobId: job.id,
@@ -107,7 +110,7 @@ export function classifyJob({
       ...base,
       severity: "unknown",
       headline: "No history yet",
-      detail: `${job.name} was connected recently and hasn't reported a run yet. This isn't a failure — there's just nothing to show.`,
+      detail: `${job.name} was connected recently and hasn't reported a ${terms.run} yet. This isn't a failure — there's just nothing to show.`,
       baseline: { failureRatePercent: 0, isTypicalToday: true },
     };
   }
@@ -157,11 +160,11 @@ export function classifyJob({
       const blocking = dependentNames.length > 0;
       if (blocking && staleMs > graceMs) {
         severity = "critical";
-        headline = `Failed and is blocking ${dependentNames.length === 1 ? dependentNames[0] : `${dependentNames.length} other jobs`}`;
+        headline = `Failed and is blocking ${dependentNames.length === 1 ? dependentNames[0] : `${dependentNames.length} other ${terms.jobs}`}`;
         detail = `Failed ${formatRelative(latest.endedAt, now)} with no retry, and is now well past its expected completion time. This is holding up: ${dependentNames.join(", ")}.`;
       } else if (blocking) {
         severity = "needs_attention";
-        headline = `Failed — blocks ${dependentNames.length === 1 ? dependentNames[0] : `${dependentNames.length} other jobs`}`;
+        headline = `Failed — blocks ${dependentNames.length === 1 ? dependentNames[0] : `${dependentNames.length} other ${terms.jobs}`}`;
         detail = `Failed ${formatRelative(latest.endedAt, now)} with no retry in progress. It hasn't been broken long, but it's blocking: ${dependentNames.join(", ")}.`;
       } else {
         severity = "needs_attention";
@@ -272,28 +275,33 @@ export function headlineCopyFor(
   healthyCount: number,
   trendCopy: string,
   lastSyncedRelative: string,
+  terms: Terminology,
   criticalExceptions: JobStatus[] = [],
 ): { headlineCopy: string; subCopy: string } {
+  const jobWord = (count: number) => (count === 1 ? terms.job : terms.jobs);
   switch (kind) {
     case "healthy":
       return {
         headlineCopy: `${scopeName} looks healthy`,
-        subCopy: `${healthyCount} of ${totalJobs} jobs on track — ${trendCopy}`,
+        subCopy: `${healthyCount} of ${totalJobs} ${terms.jobs} on track — ${trendCopy}`,
       };
     case "needs_attention":
       return {
         headlineCopy: `${scopeName} needs a look`,
-        subCopy: `${exceptionCount} job${exceptionCount === 1 ? "" : "s"} need${exceptionCount === 1 ? "s" : ""} attention — ${trendCopy}`,
+        subCopy: `${exceptionCount} ${jobWord(exceptionCount)} need${exceptionCount === 1 ? "s" : ""} attention — ${trendCopy}`,
       };
     case "critical": {
       const rest = exceptionCount - criticalExceptions.length;
       const namedPart =
         criticalExceptions.length === 1
           ? `${criticalExceptions[0].jobName} failed and is blocking other work`
-          : `${criticalExceptions.length} jobs have failed and are blocking other work`;
+          : `${criticalExceptions.length} ${terms.jobs} have failed and are blocking other work`;
       return {
         headlineCopy: `${scopeName} needs attention now`,
-        subCopy: rest > 0 ? `${namedPart} — ${rest} more job${rest === 1 ? "" : "s"} also need${rest === 1 ? "s" : ""} a look` : namedPart,
+        subCopy:
+          rest > 0
+            ? `${namedPart} — ${rest} more ${jobWord(rest)} also need${rest === 1 ? "s" : ""} a look`
+            : namedPart,
       };
     }
     case "unreachable":
@@ -309,7 +317,7 @@ export function headlineCopyFor(
     case "empty":
       return {
         headlineCopy: `Nothing scheduled for ${scopeName}`,
-        subCopy: `No jobs are due in this window — that's expected, not a problem`,
+        subCopy: `No ${terms.jobs} are due in this window — that's expected, not a problem`,
       };
   }
 }
