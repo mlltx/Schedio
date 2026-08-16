@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { getScopes, getAllScopeStatuses, type ConnectorFn, type TimeWindow } from "@/model";
+import { getAllScopeStatuses, type ConnectorFn, type TimeWindow } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
 import { ScopeSwitcher } from "./ScopeSwitcher";
@@ -11,9 +11,6 @@ import { DemoControls } from "./DemoControls";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";
 import type { JobNavigation } from "./navigation";
-
-const scopes = getScopes();
-const teamScopes = scopes.filter((s) => s.kind === "team");
 
 const defaultLoading = () => (
   <div className="mt-6 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
@@ -48,23 +45,28 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
   // The switcher needs every scope's status at once (to show a status dot
   // per scope) — getAllScopeStatuses fetches the connector snapshot and
   // classifies every job exactly once and rolls up all scopes from that,
-  // rather than repeating the fetch+classify work once per scope.
-  const scopeStatuses = usePromise(
+  // rather than repeating the fetch+classify work once per scope. Scopes
+  // themselves are connector-reported now (not a static list), so they
+  // come from this same fetch too — a switcher tab can't exist before the
+  // first fetch resolves, the same way a scope's status can't.
+  const data = usePromise(
     () => getAllScopeStatuses(timeWindow, { reachabilityOverrides, terms: tenant.terminology, connector }),
     [timeWindow, reachabilityOverrides, tenant.terminology, connector],
   );
 
+  const teamScopes = useMemo(() => data?.scopes.filter((s) => s.kind === "team") ?? [], [data]);
+
   const headlineByScope = useMemo(() => {
-    if (!scopeStatuses) return {};
-    return Object.fromEntries(Object.entries(scopeStatuses).map(([id, s]) => [id, s.headline]));
-  }, [scopeStatuses]);
+    if (!data) return {};
+    return Object.fromEntries(Object.entries(data.statuses).map(([id, s]) => [id, s.headline]));
+  }, [data]);
 
   const reachableByScope = useMemo(() => {
-    if (!scopeStatuses) return {};
-    return Object.fromEntries(teamScopes.map((s) => [s.id, scopeStatuses[s.id]?.connectorReachable ?? true]));
-  }, [scopeStatuses]);
+    if (!data) return {};
+    return Object.fromEntries(teamScopes.map((s) => [s.id, data.statuses[s.id]?.connectorReachable ?? true]));
+  }, [data, teamScopes]);
 
-  const view = scopeStatuses?.[selectedScopeId];
+  const view = data?.statuses[selectedScopeId];
   const demoControlsVisible = showDemoControls ?? connector === undefined;
 
   return (
@@ -83,33 +85,37 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
         <TimeWindowPicker value={timeWindow} onChange={setTimeWindow} />
       </div>
 
-      <ScopeSwitcher
-        scopes={scopes}
-        headlineByScope={headlineByScope}
-        selectedScopeId={selectedScopeId}
-        onSelect={setSelectedScopeId}
-      />
-
-      {!view ? (
+      {!data ? (
         renderLoading()
       ) : (
         <>
-          <div className="mt-6">
-            <HeadlineBanner view={view} />
-          </div>
-
-          <ExceptionList
-            exceptions={view.exceptions}
-            heading={tenant.copy.exceptionsHeading}
-            terms={tenant.terminology}
-            onOutageClick={setSelectedScopeId}
-            getJobHref={getJobHref}
-            onJobSelect={onJobSelect}
+          <ScopeSwitcher
+            scopes={data.scopes}
+            headlineByScope={headlineByScope}
+            selectedScopeId={selectedScopeId}
+            onSelect={setSelectedScopeId}
           />
+
+          {view && (
+            <>
+              <div className="mt-6">
+                <HeadlineBanner view={view} />
+              </div>
+
+              <ExceptionList
+                exceptions={view.exceptions}
+                heading={tenant.copy.exceptionsHeading}
+                terms={tenant.terminology}
+                onOutageClick={setSelectedScopeId}
+                getJobHref={getJobHref}
+                onJobSelect={onJobSelect}
+              />
+            </>
+          )}
         </>
       )}
 
-      {demoControlsVisible && (
+      {demoControlsVisible && data && (
         <DemoControls
           teamScopes={teamScopes}
           reachableByScope={reachableByScope}

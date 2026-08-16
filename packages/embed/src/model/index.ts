@@ -12,7 +12,6 @@ import type {
   TimeWindow,
 } from "./types";
 import { DEFAULT_TERMINOLOGY } from "./types";
-import { SCOPES } from "./seed-data";
 import { getExpectedRunTimes, mockConnector, type ConnectorFn, type ConnectorSnapshot } from "./connector";
 import { buildDependentIdsMap } from "./graph-utils";
 import {
@@ -64,8 +63,16 @@ export type { Job, Run, RunStatus, Schedule, Sla, Cadence } from "./types";
 export type { ConnectorFn, ConnectorSnapshot } from "./connector";
 export { mockConnector } from "./connector";
 
-export function getScopes(): Scope[] {
-  return SCOPES;
+/**
+ * A connector's own scopes — async because they're connector-reported now,
+ * not a static list. `getAllScopeStatuses` already returns this alongside
+ * every scope's rolled-up status for `GlanceView`'s own use; reach for this
+ * directly only if you want the scope list without also paying for a full
+ * rollup of every scope's jobs.
+ */
+export async function getScopes(options: GlanceViewOptions = {}): Promise<Scope[]> {
+  const { snapshot } = await prepareData(options);
+  return snapshot.scopes;
 }
 
 function buildDependentsMap(jobs: Job[]): Map<string, string[]> {
@@ -167,7 +174,7 @@ function buildScopeStatus(scope: Scope, window: TimeWindow, { now, terms, snapsh
   const childScopeIds = [...new Set(scopeJobs.map((j) => j.scopeId))];
   const unreachableChildScopes = childScopeIds
     .filter((id) => !snapshot.reachableScopeIds.has(id))
-    .map((id) => ({ id, name: SCOPES.find((s) => s.id === id)?.name ?? id }));
+    .map((id) => ({ id, name: snapshot.scopes.find((s) => s.id === id)?.name ?? id }));
   // "All" is an aggregate of several connectors, not a connector itself —
   // one child scope going dark is a partial-outage exception (handled
   // below via a synthetic row), not grounds for the whole aggregate to
@@ -249,22 +256,32 @@ function buildScopeStatus(scope: Scope, window: TimeWindow, { now, terms, snapsh
 }
 
 export async function getGlanceView(scopeId: string, window: TimeWindow, options: GlanceViewOptions = {}): Promise<ScopeStatus> {
-  const scope = SCOPES.find((s) => s.id === scopeId) ?? SCOPES[0];
   const prepared = await prepareData(options);
+  const scope = prepared.snapshot.scopes.find((s) => s.id === scopeId) ?? prepared.snapshot.scopes[0];
   return buildScopeStatus(scope, window, prepared);
+}
+
+export interface AllScopeStatuses {
+  /** Every scope this connector (or combination of connectors) reported, in the order it reported them. */
+  scopes: Scope[];
+  statuses: Record<string, ScopeStatus>;
 }
 
 /**
  * Every scope's status in one fetch — for a switcher that needs to show a
  * status dot per scope, this is the difference between fetching and
- * classifying the whole dataset once vs. once per scope.
+ * classifying the whole dataset once vs. once per scope. Also returns the
+ * scope list itself: scopes are connector-reported now, not a static
+ * import, so a caller needing "which scopes exist" (e.g. to render
+ * switcher tabs) gets it from the same fetch instead of a second one.
  */
-export async function getAllScopeStatuses(
-  window: TimeWindow,
-  options: GlanceViewOptions = {},
-): Promise<Record<string, ScopeStatus>> {
+export async function getAllScopeStatuses(window: TimeWindow, options: GlanceViewOptions = {}): Promise<AllScopeStatuses> {
   const prepared = await prepareData(options);
-  return Object.fromEntries(SCOPES.map((scope) => [scope.id, buildScopeStatus(scope, window, prepared)]));
+  const { scopes } = prepared.snapshot;
+  return {
+    scopes,
+    statuses: Object.fromEntries(scopes.map((scope) => [scope.id, buildScopeStatus(scope, window, prepared)])),
+  };
 }
 
 export async function getJobDetail(
@@ -281,7 +298,7 @@ export async function getJobDetail(
     .slice()
     .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
-  const scope = SCOPES.find((s) => s.id === job.scopeId);
+  const scope = snapshot.scopes.find((s) => s.id === job.scopeId);
 
   return {
     ...status,

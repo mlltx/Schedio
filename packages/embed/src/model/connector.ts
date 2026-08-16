@@ -1,5 +1,5 @@
-import type { Job, Run, RunStatus, Schedule } from "./types";
-import { CORE_PLATFORM_INCIDENT_ROOT_ID, JOBS, JOBS_BY_SCOPE } from "./seed-data";
+import type { Job, Run, RunStatus, Schedule, Scope } from "./types";
+import { CORE_PLATFORM_INCIDENT_ROOT_ID, JOBS, JOBS_BY_SCOPE, SCOPES } from "./seed-data";
 import { buildDependentIdsMap } from "./graph-utils";
 import { CADENCE_INTERVAL_MS } from "./compute";
 
@@ -384,6 +384,14 @@ function effectiveJob(job: Job, now: Date): Job {
 
 export interface ConnectorSnapshot {
   jobs: Job[];
+  /**
+   * A connector reports its own scopes — this is what a team/tag/instance
+   * *is*, according to whichever backend produced this snapshot. Nothing
+   * downstream (compute.ts, components) hardcodes a scope list; the mock
+   * connector's own `SCOPES` fixture is just the first thing to satisfy
+   * this contract, not special-cased.
+   */
+  scopes: Scope[];
   runsByJobId: Map<string, Run[]>;
   reachableScopeIds: Set<string>;
   lastSyncedAt: string;
@@ -424,6 +432,7 @@ export const mockConnector: ConnectorFn = (now, reachabilityOverrides = {}): Con
 
   return {
     jobs,
+    scopes: SCOPES,
     runsByJobId,
     reachableScopeIds,
     lastSyncedAt: new Date(now.getTime() - 52 * MS).toISOString(),
