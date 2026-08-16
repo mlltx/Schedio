@@ -28,10 +28,11 @@ re-derive status/severity logic in a component — that logic belongs in
 ## Repo layout
 
 ```
-MISSION.md          — product mission and architectural principles (read first)
-package.json         — npm workspaces root ("packages/*", "web")
-packages/embed/       — @schedio/embed: the model + UI, published as a component
-web/                  — our own hosted app; a thin consumer of @schedio/embed
+MISSION.md               — product mission and architectural principles (read first)
+package.json              — npm workspaces root ("packages/*", "web")
+packages/embed/            — @schedio/embed: the model + UI, published as a component
+packages/connector-airflow/ — @schedio/connector-airflow: maps an Airflow 3 instance into the model
+web/                       — our own hosted app; a thin consumer of @schedio/embed
 ```
 
 ## Commands
@@ -44,6 +45,12 @@ Install once from the repo root (`npm install`) — this links `web/`'s
 npm run build --workspace=packages/embed   # tsup (JS+types) + scoped CSS -> dist/
 npm run typecheck --workspace=packages/embed
 npm run lint --workspace=packages/embed
+
+# packages/connector-airflow/ — the Airflow connector package
+npm run build --workspace=packages/connector-airflow      # tsup (JS+types) -> dist/
+npm run typecheck --workspace=packages/connector-airflow
+npm run lint --workspace=packages/connector-airflow
+npm run test --workspace=packages/connector-airflow       # node --test, fixture-based, no live Airflow needed
 
 # web/ — the hosted app
 npm run dev --workspace=web       # dev server, Turbopack, http://localhost:3000
@@ -66,9 +73,12 @@ already-running `next dev` — restart it after a package rebuild. This
 `next build` inside `web/`, scoped by the dashboard's Root Directory
 setting) still builds `packages/embed` first — don't remove it.
 
-There is no test suite (no test script, no test framework installed).
-Verification is: typecheck + lint + build for both packages, and a
-manual/Playwright smoke pass — see "Shipping a UI change" below.
+`packages/embed` and `web/` have no test suite — verification there is
+typecheck + lint + build, plus a manual/Playwright smoke pass (see
+"Shipping a UI change" below). `packages/connector-airflow` does have
+fixture-based tests (`node --test`, no test-framework dependency added) —
+its mapping logic is pure functions worth pinning down, and there's no
+live Airflow instance in this environment to smoke-test against instead.
 
 ## Architecture
 
@@ -109,7 +119,43 @@ vocabulary. `@/*` inside the package resolves to `packages/embed/src/*`
 point for a real backend: implement `ConnectorFn`, pass it in, and nothing
 in `compute.ts` or any component changes. Because a real connector fetches
 over the network, both functions are `async`; components fetch via the
-internal `usePromise` hook rather than `useMemo`.
+internal `usePromise` hook rather than `useMemo`. `ConnectorSnapshot.scopes`
+is reported by the connector too, not a static list — a real backend has
+no other way to tell Schedio what teams/instances/tags exist. Every
+snapshot `prepareData()` prepares is guaranteed to have exactly one `kind:
+"all"` scope (synthesized if a connector's own snapshot doesn't include
+one) — a connector author doesn't need to remember this, it's not a
+contract that can be silently gotten wrong.
+
+### Multiple connectors, and real (non-mock) connector packages
+
+`combineConnectors` (in `model/connector.ts`, exported from the package
+root) merges several `ConnectorFn`s — several instances of the same
+backend, or entirely different backends — into one, so `GlanceView`/
+`JobDetail`/`PipelineGraphView` still only ever see a single `connector`
+prop; no component changes when a host adds a connector. It namespaces
+every job/scope id itself, keyed by whatever the caller names each
+connector in the `Record<string, ConnectorFn>` it's given — it does not
+trust an individual connector to self-namespace, since a mismatch between
+a connector's own internal identity and the key it's registered under
+would otherwise silently corrupt the merge. One source failing outright
+(`Promise.allSettled`) doesn't take the others down; each source's own
+`reachable`/`lastSyncedAt` surfaces independently via the snapshot's
+optional `sources` field.
+
+Real (non-mock) connectors live as **separate workspace packages**, never
+inside `packages/embed` itself — `packages/connector-airflow/` is the
+first one. This is the whole point: installing/using the Airflow connector
+must not pull Dagster's SDK (or anything else) into a build that never
+imports it, and `packages/embed` has zero dependency on any specific
+connector, ever. A connector package's only dependency on `@schedio/embed`
+is `import type` (compiles away — verify with `grep schedio/embed
+dist/index.js` after building any connector package; it should find
+nothing). See `packages/connector-airflow/README.md` for the concrete
+DAG→Job/DagRun→Run mapping and its documented limitations, and follow that
+package's shape (one factory export, a required `id` config field, fixture
+tests via `node --test` rather than a new test-framework dependency) when
+adding another.
 
 ### Embeddability: no assumed host
 
