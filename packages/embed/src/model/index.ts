@@ -149,6 +149,20 @@ interface PreparedData {
 }
 
 /**
+ * Every snapshot needs exactly one aggregate ("all") scope — it's what
+ * `getGlanceView("all", ...)` and the switcher's default view resolve
+ * against. Rather than trust every connector author to remember to emit
+ * one (easy to miss, and the failure mode is quiet: "All" would silently
+ * fall back to whichever scope happens to be first), guarantee it here,
+ * once, for every snapshot regardless of which connector — or how many,
+ * via `combineConnectors` — produced it.
+ */
+function withAggregateScope(snapshot: ConnectorSnapshot): ConnectorSnapshot {
+  if (snapshot.scopes.some((s) => s.kind === "all")) return snapshot;
+  return { ...snapshot, scopes: [{ id: "all", name: "All", kind: "all" }, ...snapshot.scopes] };
+}
+
+/**
  * Fetches the connector snapshot and classifies every job exactly once.
  * Neither step depends on which scope or time window is being viewed, so
  * this is shared across every scope's rollup rather than repeated per
@@ -160,7 +174,7 @@ async function prepareData(options: GlanceViewOptions): Promise<PreparedData> {
   const now = options.now ?? new Date();
   const terms = options.terms ?? DEFAULT_TERMINOLOGY;
   const connector = options.connector ?? mockConnector;
-  const snapshot = await connector(now, options.reachabilityOverrides ?? {});
+  const snapshot = withAggregateScope(await connector(now, options.reachabilityOverrides ?? {}));
   const statusMap = classifyAllJobs(snapshot, now, terms);
   return { now, terms, snapshot, statusMap };
 }

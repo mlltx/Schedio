@@ -494,10 +494,11 @@ function namespaceRuns(key: string, jobId: string, runs: Run[]): Run[] {
  * it right.
  *
  * Each source's own "all" (aggregate) scope is dropped — only its "team"
- * scopes carry through — and exactly one synthetic "all" scope is produced
- * for the combined result, so the merged snapshot still satisfies the same
- * "every snapshot has one aggregate scope" contract a single connector's
- * snapshot does.
+ * scopes carry through. The merged result doesn't need its own synthetic
+ * "all" scope here: the model layer (`prepareData` in model/index.ts)
+ * guarantees exactly one on every snapshot it prepares, single-connector
+ * or combined alike, so that contract lives in one place, not duplicated
+ * here.
  *
  * A source that fails outright (a thrown/rejected fetch, not a well-behaved
  * connector reporting its own scopes as unreachable) doesn't take the
@@ -512,7 +513,11 @@ export function combineConnectors(connectors: Record<string, ConnectorFn>): Conn
     const settled = await Promise.allSettled(keys.map((key) => connectors[key](now, reachabilityOverrides)));
 
     const jobs: Job[] = [];
-    const scopes: Scope[] = [{ id: "all", name: "All", kind: "all" }];
+    // Each source's own "all" scope is dropped below (only "team" scopes
+    // carry through) — the model layer guarantees a single canonical "all"
+    // scope on every snapshot it prepares, so combineConnectors doesn't
+    // need to synthesize its own here too.
+    const scopes: Scope[] = [];
     const runsByJobId = new Map<string, Run[]>();
     const reachableScopeIds = new Set<string>();
     const sources: Record<string, ConnectorSourceStatus> = {};
