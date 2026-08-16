@@ -1,10 +1,12 @@
 "use client";
 
+import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
-import { getJobDetail, type ConnectorFn } from "@/model";
+import { getJobDetail, type ConnectorFn, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
 import { usePromise } from "./usePromise";
+import { cx } from "./cx";
 
 function formatClock(iso?: string) {
   if (!iso) return "—";
@@ -27,6 +29,14 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const defaultLoading = () => (
+  <div className="animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
+);
+
+const defaultNotFound = (terms: Terminology) => (
+  <p className="text-sm text-zinc-500 dark:text-zinc-400">This {terms.job} could not be found.</p>
+);
+
 export interface JobDetailProps {
   jobId: string;
   /** Where the data comes from. Defaults to Schedio's built-in mock connector. */
@@ -35,6 +45,13 @@ export interface JobDetailProps {
   backHref?: string;
   /** Called when "Back to glance" is activated — use for client-side routing. */
   onBack?: () => void;
+  /** Replaces the default skeleton shown while the fetch is in flight. */
+  renderLoading?: () => ReactNode;
+  /** Replaces the default "This job could not be found" message. Still rendered below the back link. */
+  renderNotFound?: () => ReactNode;
+  /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
+  className?: string;
+  style?: CSSProperties;
 }
 
 function BackLink({ backHref, onBack }: Pick<JobDetailProps, "backHref" | "onBack">) {
@@ -67,28 +84,40 @@ function BackLink({ backHref, onBack }: Pick<JobDetailProps, "backHref" | "onBac
   return null;
 }
 
-export function JobDetail({ jobId, connector, backHref, onBack }: JobDetailProps) {
+export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function JobDetail(
+  {
+    jobId,
+    connector,
+    backHref,
+    onBack,
+    renderLoading = defaultLoading,
+    renderNotFound,
+    className,
+    style,
+  },
+  ref,
+) {
   const tenant = useTenantConfig();
   const job = usePromise(async () => {
     const result = await getJobDetail(jobId, { terms: tenant.terminology, connector });
     return result ?? null;
   }, [jobId, tenant.terminology, connector]);
 
+  const rootClassName = cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className);
+
   if (job === undefined) {
     return (
-      <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-        <div className="animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
+      <div ref={ref} style={style} className={rootClassName}>
+        {renderLoading()}
       </div>
     );
   }
 
   if (job === null) {
     return (
-      <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <div ref={ref} style={style} className={rootClassName}>
         <BackLink backHref={backHref} onBack={onBack} />
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          This {tenant.terminology.job} could not be found.
-        </p>
+        {(renderNotFound ?? (() => defaultNotFound(tenant.terminology)))()}
       </div>
     );
   }
@@ -97,7 +126,7 @@ export function JobDetail({ jobId, connector, backHref, onBack }: JobDetailProps
   const visual = SEVERITY_VISUAL[job.severity];
 
   return (
-    <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    <div ref={ref} style={style} className={rootClassName}>
       <BackLink backHref={backHref} onBack={onBack} />
 
       <div className="flex items-start justify-between gap-4">
@@ -225,4 +254,4 @@ export function JobDetail({ jobId, connector, backHref, onBack }: JobDetailProps
       </p>
     </div>
   );
-}
+});

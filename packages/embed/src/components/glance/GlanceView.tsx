@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { getScopes, getGlanceView, type ConnectorFn, type ScopeStatus, type TimeWindow } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
@@ -9,10 +9,15 @@ import { TimeWindowPicker } from "./TimeWindowPicker";
 import { ExceptionList } from "./ExceptionList";
 import { DemoControls } from "./DemoControls";
 import { usePromise } from "./usePromise";
+import { cx } from "./cx";
 import type { JobNavigation } from "./navigation";
 
 const scopes = getScopes();
 const teamScopes = scopes.filter((s) => s.kind === "team");
+
+const defaultLoading = () => (
+  <div className="mt-6 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
+);
 
 export interface GlanceViewProps extends JobNavigation {
   /** Where the data comes from. Defaults to Schedio's built-in mock connector. */
@@ -24,9 +29,17 @@ export interface GlanceViewProps extends JobNavigation {
    * so this doesn't default on for a real integration).
    */
   showDemoControls?: boolean;
+  /** Replaces the default skeleton shown while the first fetch is in flight. */
+  renderLoading?: () => ReactNode;
+  /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
+  className?: string;
+  style?: CSSProperties;
 }
 
-export function GlanceView({ connector, showDemoControls, getJobHref, onJobSelect }: GlanceViewProps) {
+export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function GlanceView(
+  { connector, showDemoControls, renderLoading = defaultLoading, className, style, getJobHref, onJobSelect },
+  ref,
+) {
   const tenant = useTenantConfig();
   const [selectedScopeId, setSelectedScopeId] = useState("all");
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("since_midnight");
@@ -63,7 +76,11 @@ export function GlanceView({ connector, showDemoControls, getJobHref, onJobSelec
   const demoControlsVisible = showDemoControls ?? connector === undefined;
 
   return (
-    <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+    <div
+      ref={ref}
+      style={style}
+      className={cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className)}
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <span className="truncate text-sm font-semibold tracking-widest text-zinc-400 uppercase dark:text-zinc-500">
           {tenant.brand.productName}
@@ -82,7 +99,7 @@ export function GlanceView({ connector, showDemoControls, getJobHref, onJobSelec
       />
 
       {!view ? (
-        <div className="mt-6 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
+        renderLoading()
       ) : (
         <>
           <div className="mt-6">
@@ -110,4 +127,4 @@ export function GlanceView({ connector, showDemoControls, getJobHref, onJobSelec
       )}
     </div>
   );
-}
+});
