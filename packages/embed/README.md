@@ -83,11 +83,12 @@ etc.) without hooking anything up. To show your own data, implement a
 import type { ConnectorFn } from "@schedio/embed";
 
 const myConnector: ConnectorFn = async (now, reachabilityOverrides) => {
-  // fetch from your own scheduler/API and return raw Job/Run data in
+  // fetch from your own scheduler/API and return raw Job/Run/Scope data in
   // Schedio's model shape — the exported Job, Run, Schedule, Sla,
   // Scope, RunStatus, Cadence types describe exactly what's expected.
   return {
     jobs: [...],
+    scopes: [...], // your own teams/tags/instances — Schedio never hardcodes this
     runsByJobId: new Map([...]),
     reachableScopeIds: new Set([...]),
     lastSyncedAt: new Date().toISOString(),
@@ -105,6 +106,34 @@ plain-language copy generation are computed identically regardless of
 where the raw data came from. `showDemoControls` defaults to `false` once
 you pass a real `connector` (the built-in outage simulator only makes
 sense against the mock).
+
+## Multiple connectors at once
+
+`combineConnectors` merges several connectors — several instances of the
+same backend, or entirely different backends — into one, so
+`GlanceView`/`JobDetail`/`PipelineGraphView` still only ever see a single
+`connector` prop:
+
+```ts
+import { combineConnectors } from "@schedio/embed";
+
+const connector = combineConnectors({
+  "airflow-prod": myAirflowProdConnector,
+  "airflow-staging": myAirflowStagingConnector,
+  // "dagster-core": myDagsterConnector,
+});
+
+<GlanceView connector={connector} />
+```
+
+Every job/scope id gets namespaced by its key here (`"airflow-prod:orders_etl"`),
+so two sources can reuse the same raw ids without colliding — you don't
+need to coordinate unique ids across connectors yourself. One source
+failing outright doesn't take the rest down: the merged snapshot's
+`sources` field reports each one's own `reachable`/`lastSyncedAt`
+independently (`reachable` here means "this connector's fetch succeeded",
+not "and every one of its scopes is currently up" — which scope is
+specifically down is what per-scope `reachableScopeIds` is still for).
 
 ## Branding and terminology
 

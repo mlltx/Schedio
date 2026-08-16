@@ -60,8 +60,8 @@ export { isNonHealthySeverity } from "./compute";
 // Raw model shapes + the connector seam itself. Components never see these —
 // only someone implementing a real connector needs them.
 export type { Job, Run, RunStatus, Schedule, Sla, Cadence } from "./types";
-export type { ConnectorFn, ConnectorSnapshot } from "./connector";
-export { mockConnector } from "./connector";
+export type { ConnectorFn, ConnectorSnapshot, ConnectorSourceStatus } from "./connector";
+export { mockConnector, combineConnectors } from "./connector";
 
 /**
  * A connector's own scopes — async because they're connector-reported now,

@@ -75,5 +75,20 @@ export type {
 // ---------------------------------------------------------------------------
 // For building your own connector — the seam that replaces the mock data
 // with a real backend. See MISSION.md: "connectors are thin and disposable".
+// combineConnectors merges several into one (multiple instances of the
+// same backend, or several different backends) — GlanceView/JobDetail/
+// PipelineGraphView never know the difference; they still just take one
+// `connector` prop.
 // ---------------------------------------------------------------------------
-export type { ConnectorFn, ConnectorSnapshot, Job, Run, RunStatus, Schedule, Sla, Cadence } from "./model";
+export { combineConnectors } from "./model";
+export type {
+  ConnectorFn,
+  ConnectorSnapshot,
+  ConnectorSourceStatus,
+  Job,
+  Run,
+  RunStatus,
+  Schedule,
+  Sla,
+  Cadence,
+} from "./model";

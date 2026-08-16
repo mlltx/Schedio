@@ -382,6 +382,15 @@ function effectiveJob(job: Job, now: Date): Job {
   return { ...job, schedule: { ...job.schedule, dayOfMonth: safeDay } };
 }
 
+/** One source's own sync/reachability, as reported inside a combined snapshot — see `combineConnectors`. */
+export interface ConnectorSourceStatus {
+  reachable: boolean;
+  /** Absent if this source's fetch failed outright — there's no sync time to report. */
+  lastSyncedAt?: string;
+  /** This source's own scope ids, already namespaced — lets a consumer attribute a scope back to its source. */
+  scopeIds: string[];
+}
+
 export interface ConnectorSnapshot {
   jobs: Job[];
   /**
@@ -394,7 +403,16 @@ export interface ConnectorSnapshot {
   scopes: Scope[];
   runsByJobId: Map<string, Run[]>;
   reachableScopeIds: Set<string>;
+  /** The whole snapshot's sync time — for a single connector, its own; for a combined one, the oldest of its sources. */
   lastSyncedAt: string;
+  /**
+   * Present only on a snapshot produced by `combineConnectors` — one entry
+   * per source, keyed the same way the caller keyed it. A snapshot from a
+   * single connector has exactly one source (itself), so the top-level
+   * `reachableScopeIds`/`lastSyncedAt` already tell the whole story and
+   * this is omitted rather than populated with a redundant single entry.
+   */
+  sources?: Record<string, ConnectorSourceStatus>;
 }
 
 /**
@@ -438,3 +456,109 @@ export const mockConnector: ConnectorFn = (now, reachabilityOverrides = {}): Con
     lastSyncedAt: new Date(now.getTime() - 52 * MS).toISOString(),
   };
 };
+
+// ---------------------------------------------------------------------------
+// combineConnectors — merges N connectors' snapshots into one. This is the
+// seam that turns "one Airflow" into "several Airflow instances, or several
+// different backends, viewed together" without GlanceView/JobDetail/
+// PipelineGraphView changing at all: they still only ever see one
+// ConnectorFn. See MISSION.md's "migration mode is first-class" and the
+// connector architecture design doc for the full reasoning.
+// ---------------------------------------------------------------------------
+
+function namespaceJob(key: string, job: Job): Job {
+  return {
+    ...job,
+    id: `${key}:${job.id}`,
+    scopeId: `${key}:${job.scopeId}`,
+    dependsOn: job.dependsOn.map((id) => `${key}:${id}`),
+  };
+}
+
+function namespaceRuns(key: string, jobId: string, runs: Run[]): Run[] {
+  return runs.map((run) => ({ ...run, jobId: `${key}:${jobId}` }));
+}
+
+/**
+ * Combines several connectors into one, keyed by whatever name the caller
+ * gives each — e.g. `combineConnectors({ "airflow-prod": ..., "airflow-staging": ... })`.
+ *
+ * Every job/scope id is re-namespaced by its source's key here, regardless
+ * of whatever id scheme (if any) the connector itself already uses.
+ * combineConnectors owns global uniqueness itself rather than trusting each
+ * connector to self-namespace correctly — a mismatch between a connector's
+ * own internal identity and the key it happens to be registered under here
+ * would otherwise silently corrupt the merge (two sources' jobs colliding
+ * in one Map), which is a much worse failure mode than combineConnectors
+ * just doing the renaming itself, once, in the one place that has to get
+ * it right.
+ *
+ * Each source's own "all" (aggregate) scope is dropped — only its "team"
+ * scopes carry through — and exactly one synthetic "all" scope is produced
+ * for the combined result, so the merged snapshot still satisfies the same
+ * "every snapshot has one aggregate scope" contract a single connector's
+ * snapshot does.
+ *
+ * A source that fails outright (a thrown/rejected fetch, not a well-behaved
+ * connector reporting its own scopes as unreachable) doesn't take the
+ * merge down with it — Promise.allSettled means one bad source is marked
+ * unreachable in `sources` and simply contributes nothing, while every
+ * other source's data still renders normally.
+ */
+export function combineConnectors(connectors: Record<string, ConnectorFn>): ConnectorFn {
+  const keys = Object.keys(connectors);
+
+  return async (now, reachabilityOverrides) => {
+    const settled = await Promise.allSettled(keys.map((key) => connectors[key](now, reachabilityOverrides)));
+
+    const jobs: Job[] = [];
+    const scopes: Scope[] = [{ id: "all", name: "All", kind: "all" }];
+    const runsByJobId = new Map<string, Run[]>();
+    const reachableScopeIds = new Set<string>();
+    const sources: Record<string, ConnectorSourceStatus> = {};
+    const syncTimesMs: number[] = [];
+
+    keys.forEach((key, i) => {
+      const result = settled[i];
+      if (result.status === "rejected") {
+        sources[key] = { reachable: false, scopeIds: [] };
+        return;
+      }
+
+      const snapshot = result.value;
+      const teamScopes = snapshot.scopes.filter((s) => s.kind !== "all");
+      const namespacedScopeIds = new Set(teamScopes.map((s) => `${key}:${s.id}`));
+
+      for (const scope of teamScopes) scopes.push({ ...scope, id: `${key}:${scope.id}` });
+      for (const job of snapshot.jobs) jobs.push(namespaceJob(key, job));
+      for (const [jobId, runs] of snapshot.runsByJobId) {
+        runsByJobId.set(`${key}:${jobId}`, namespaceRuns(key, jobId, runs));
+      }
+      for (const scopeId of snapshot.reachableScopeIds) {
+        const namespacedId = `${key}:${scopeId}`;
+        if (namespacedScopeIds.has(namespacedId)) reachableScopeIds.add(namespacedId);
+      }
+
+      // "reachable" here means the connector's own fetch succeeded, full
+      // stop — not "and every one of its scopes is currently up". Those
+      // are different questions: which specific scopes are degraded is
+      // already fully answered by the merged `reachableScopeIds` (cross-
+      // reference against this source's own `scopeIds` below). Folding
+      // "one of eight scopes is down" into a single false here would
+      // make a source with a scripted partial outage look completely
+      // dead, which is exactly the information loss per-source tracking
+      // exists to avoid.
+      sources[key] = { reachable: true, lastSyncedAt: snapshot.lastSyncedAt, scopeIds: [...namespacedScopeIds] };
+      syncTimesMs.push(new Date(snapshot.lastSyncedAt).getTime());
+    });
+
+    // Most conservative combined value: never claim the merge is fresher
+    // than its stalest successful source. If every source failed outright,
+    // there's no real sync time to report — falling back to `now` here is
+    // a defensive last resort (a well-behaved connector shouldn't throw),
+    // not a claim that anything actually synced.
+    const lastSyncedAt = syncTimesMs.length > 0 ? new Date(Math.min(...syncTimesMs)).toISOString() : now.toISOString();
+
+    return { jobs, scopes, runsByJobId, reachableScopeIds, lastSyncedAt, sources };
+  };
+}
