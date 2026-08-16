@@ -131,6 +131,13 @@ Tailwind output with `postcss-prefix-selector` so every rule (including
 `@schedio/embed/style.css` once; it can't leak onto their page, and their
 page's styles can't leak in either.
 
+Both components also carry the standard React component-library escape
+hatches (`forwardRef`, `className`/`style` merged onto the root,
+`renderLoading`/`renderNotFound` overrides) — see `packages/embed/README.md`
+for the full props reference. Keep these in sync if you add new top-level
+components: a component meant to be embedded that can't be ref'd, styled,
+or have its loading state overridden doesn't fit the pattern.
+
 ### Tenant config (branding + terminology)
 
 `packages/embed/src/config/` lets a deployment supply its own product
