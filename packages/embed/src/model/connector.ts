@@ -422,11 +422,35 @@ export interface ConnectorSnapshot {
  * snapshot came from. Async because real connectors fetch over the network;
  * `getGlanceView`/`getJobDetail` await this even when a connector (like the
  * built-in mock) happens to resolve synchronously.
+ *
+ * `pollIntervalMs` is how this *specific* connector wants to be re-polled
+ * for fresh data — set it once where the connector itself is configured
+ * (e.g. `createAirflowConnector({ pollIntervalMs: 45_000 })`) rather than
+ * threading a matching prop through every component that might render it.
+ * Omit to use `DEFAULT_POLL_INTERVAL_MS`; set to `0` to disable polling
+ * for this connector entirely. See `resolvePollIntervalMs`.
  */
-export type ConnectorFn = (
+export type ConnectorFn = ((
   now: Date,
   reachabilityOverrides: Record<string, boolean>,
-) => ConnectorSnapshot | Promise<ConnectorSnapshot>;
+) => ConnectorSnapshot | Promise<ConnectorSnapshot>) & {
+  pollIntervalMs?: number;
+};
+
+/** Every UI component polls at this cadence by default — see `ConnectorFn.pollIntervalMs` to change it per connector. */
+export const DEFAULT_POLL_INTERVAL_MS = 30_000;
+
+/**
+ * A connector's effective poll interval: its own `pollIntervalMs` if it
+ * set one (`0` disables polling entirely), otherwise the default. Reads a
+ * plain function value fine too (`pollIntervalMs` simply isn't set) — a
+ * connector author doesn't have to opt into this to get the default 30s
+ * cadence, only to change or disable it.
+ */
+export function resolvePollIntervalMs(connector: ConnectorFn): number {
+  if (connector.pollIntervalMs === 0) return 0;
+  return connector.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+}
 
 export const mockConnector: ConnectorFn = (now, reachabilityOverrides = {}): ConnectorSnapshot => {
   const runsByJobId = new Map<string, Run[]>();
@@ -509,7 +533,7 @@ function namespaceRuns(key: string, jobId: string, runs: Run[]): Run[] {
 export function combineConnectors(connectors: Record<string, ConnectorFn>): ConnectorFn {
   const keys = Object.keys(connectors);
 
-  return async (now, reachabilityOverrides) => {
+  const combined: ConnectorFn = async (now, reachabilityOverrides) => {
     // Override keys arrive in the *merged* namespace (e.g.
     // "airflow-prod:data-platform" — whatever a caller like the built-in
     // outage-simulation UI read back from this combined snapshot's own
@@ -583,4 +607,13 @@ export function combineConnectors(connectors: Record<string, ConnectorFn>): Conn
 
     return { jobs, scopes, runsByJobId, reachableScopeIds, lastSyncedAt, sources };
   };
+
+  // Poll at whichever active source wants to be polled fastest — a source
+  // that stayed silent about it implicitly wants the default cadence too,
+  // same as any other connector; only an explicit `0` opts a source out.
+  // The combined result is only fully non-polling if every source is.
+  const activeIntervals = Object.values(connectors).map(resolvePollIntervalMs).filter((ms) => ms > 0);
+  combined.pollIntervalMs = activeIntervals.length > 0 ? Math.min(...activeIntervals) : 0;
+
+  return combined;
 }

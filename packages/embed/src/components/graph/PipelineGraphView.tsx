@@ -2,7 +2,15 @@
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Search, Waypoints } from "lucide-react";
-import { getDependencyGraph, isNonHealthySeverity, type ConnectorFn, type DependencyGraph, type Terminology } from "@/model";
+import {
+  getDependencyGraph,
+  isNonHealthySeverity,
+  mockConnector,
+  resolvePollIntervalMs,
+  type ConnectorFn,
+  type DependencyGraph,
+  type Terminology,
+} from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { usePromise } from "../glance/usePromise";
 import { cx } from "../glance/cx";
@@ -61,10 +69,22 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
   const tenant = useTenantConfig();
   const terms = tenant.terminology;
 
-  const graph = usePromise(async () => {
-    const result = await getDependencyGraph(jobId, { terms, connector });
-    return result ?? null;
-  }, [jobId, terms, connector]);
+  // Known tradeoff, not yet solved: a poll tick that changes nothing
+  // meaningful still produces a fresh `graph` object, and
+  // DependencyGraphCanvas's auto-fit effect keys on that reference — so
+  // every poll re-fits the camera, overriding a manual pan/zoom the user
+  // did in between. Fine for the common case (open the page, watch it
+  // update); annoying if someone's actively exploring a large pipeline
+  // while it polls. Would need a content-based diff (same node/focus set)
+  // rather than reference equality to fix properly.
+  const graph = usePromise(
+    async () => {
+      const result = await getDependencyGraph(jobId, { terms, connector });
+      return result ?? null;
+    },
+    [jobId, terms, connector],
+    resolvePollIntervalMs(connector ?? mockConnector),
+  );
 
   const [showAll, setShowAll] = useState(false);
   const [hideHealthy, setHideHealthy] = useState(true);

@@ -66,6 +66,16 @@ export interface AirflowConnectorConfig {
   graceMinutes?: number;
   /** How many recent runs to average for a DAG's expected duration (Airflow has no DAG-level SLA config to read directly). Defaults to 10. */
   durationSampleSize?: number;
+  /**
+   * How often (ms) a Schedio view showing this connector re-polls it.
+   * Defaults to `DEFAULT_POLL_INTERVAL_MS` (30s) from `@schedio/embed`;
+   * set to `0` to disable polling for this instance. Every poll re-fetches
+   * every DAG's run history in parallel (see the README's "Known
+   * limitations" on unbounded concurrency) — a large instance, or several
+   * combined via `combineConnectors`, may want a longer interval to keep
+   * load on Airflow's webserver reasonable.
+   */
+  pollIntervalMs?: number;
   /** Override the global `fetch` — mainly for tests. */
   fetchImpl?: typeof fetch;
 }

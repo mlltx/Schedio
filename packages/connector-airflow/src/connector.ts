@@ -33,7 +33,7 @@ export function createAirflowConnector(config: AirflowConnectorConfig): Connecto
   const instanceName = config.name ?? config.id;
   const instanceScope: Scope = { id: config.id, name: instanceName, kind: "team" };
 
-  return async (now, reachabilityOverrides): Promise<ConnectorSnapshot> => {
+  const connector: ConnectorFn = async (now, reachabilityOverrides): Promise<ConnectorSnapshot> => {
     // The override key is this connector's own `id` — not a per-scope id
     // the way the built-in mock connector's demo outage simulator uses
     // one — since under "tag" scoping there may be several scopes and no
@@ -80,4 +80,12 @@ export function createAirflowConnector(config: AirflowConnectorConfig): Connecto
       return unreachableSnapshot(now, instanceScope);
     }
   };
+
+  // Omit to inherit @schedio/embed's DEFAULT_POLL_INTERVAL_MS (30s); only
+  // set the property when this config explicitly says something, so a
+  // hand-rolled ConnectorFn or a future @schedio/embed default change
+  // isn't silently overridden by 30s hardcoded here too.
+  if (config.pollIntervalMs !== undefined) connector.pollIntervalMs = config.pollIntervalMs;
+
+  return connector;
 }

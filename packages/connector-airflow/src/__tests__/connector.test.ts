@@ -119,3 +119,33 @@ test("tag scope strategy is threaded through end to end", async () => {
   const scopeIds = snapshot.scopes.map((s) => s.id).sort();
   assert.deepEqual(scopeIds, ["airflow-prod-finance", "airflow-prod-platform"]);
 });
+
+test("pollIntervalMs is left unset when not configured, so @schedio/embed's default (30s) applies", () => {
+  const connector = createAirflowConnector({
+    id: "airflow-prod",
+    baseUrl: "https://airflow.example.com",
+    auth: { type: "token", token: "t" },
+    fetchImpl: fakeFetch(),
+  });
+  assert.equal(connector.pollIntervalMs, undefined);
+});
+
+test("pollIntervalMs is threaded through when explicitly configured, including 0 (disabled)", () => {
+  const custom = createAirflowConnector({
+    id: "airflow-prod",
+    baseUrl: "https://airflow.example.com",
+    auth: { type: "token", token: "t" },
+    pollIntervalMs: 60_000,
+    fetchImpl: fakeFetch(),
+  });
+  assert.equal(custom.pollIntervalMs, 60_000);
+
+  const disabled = createAirflowConnector({
+    id: "airflow-prod",
+    baseUrl: "https://airflow.example.com",
+    auth: { type: "token", token: "t" },
+    pollIntervalMs: 0,
+    fetchImpl: fakeFetch(),
+  });
+  assert.equal(disabled.pollIntervalMs, 0);
+});

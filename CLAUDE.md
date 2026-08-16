@@ -157,6 +157,40 @@ package's shape (one factory export, a required `id` config field, fixture
 tests via `node --test` rather than a new test-framework dependency) when
 adding another.
 
+### Polling
+
+Schedio doesn't get pushed updates from a real backend — freshness comes
+entirely from `usePromise` (`components/glance/usePromise.ts`) re-running
+the connector on a timer. `pollIntervalMs` is a property *on the
+`ConnectorFn` value itself* (`connector.pollIntervalMs = 45_000`), not a
+prop on `GlanceView`/`JobDetail`/`PipelineGraphView` — set once wherever
+the connector is configured (e.g. `createAirflowConnector({
+pollIntervalMs, ... })`), every component rendering that connector
+inherits it automatically, and `resolvePollIntervalMs` (`model/connector.ts`)
+is the one place that resolves "unset → `DEFAULT_POLL_INTERVAL_MS` (30s)",
+"`0` → disabled" consistently everywhere it's read. `combineConnectors`
+computes its own `pollIntervalMs` from its sources — fastest active source
+wins; only fully disabled if every source is. All three top-level
+components call `resolvePollIntervalMs(connector ?? mockConnector)` and
+pass the result as `usePromise`'s third argument — don't add a new fetch
+path that skips this, or that view silently won't poll.
+
+`usePromise`'s polling pauses on `document.visibilitychange` (skips fetch
+work for a backgrounded tab) and refetches immediately the moment the tab
+becomes visible again rather than waiting out the rest of the current
+interval — verified end-to-end with a real browser test (a counting
+connector on a short interval, checked before/after simulated
+visibility changes), not just reasoned through.
+
+**Known tradeoff, not yet solved:** `PipelineGraphView`'s auto-fit-camera
+effect (`DependencyGraphCanvas`) keys on the `graph` object reference, so
+every poll tick re-fits the camera even when nothing meaningful changed —
+overriding a manual pan/zoom the user did in between polls. Fine for "open
+the page and watch it," annoying for "actively exploring a large pipeline
+while it happens to poll." Fixing this properly needs a content-based diff
+(same node/focus set) instead of reference equality; see the comment at
+the `usePromise` call site in `PipelineGraphView.tsx`.
+
 ### Embeddability: no assumed host
 
 `GlanceView`/`JobDetail` never import `next/link` or `next/navigation` —

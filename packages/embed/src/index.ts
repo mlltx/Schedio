@@ -80,7 +80,7 @@ export type {
 // PipelineGraphView never know the difference; they still just take one
 // `connector` prop.
 // ---------------------------------------------------------------------------
-export { combineConnectors } from "./model";
+export { combineConnectors, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./model";
 export type {
   ConnectorFn,
   ConnectorSnapshot,

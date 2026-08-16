@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { getAllScopeStatuses, type ConnectorFn, type TimeWindow } from "@/model";
+import { getAllScopeStatuses, mockConnector, resolvePollIntervalMs, type ConnectorFn, type TimeWindow } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
 import { ScopeSwitcher } from "./ScopeSwitcher";
@@ -52,6 +52,7 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
   const data = usePromise(
     () => getAllScopeStatuses(timeWindow, { reachabilityOverrides, terms: tenant.terminology, connector }),
     [timeWindow, reachabilityOverrides, tenant.terminology, connector],
+    resolvePollIntervalMs(connector ?? mockConnector),
   );
 
   const teamScopes = useMemo(() => data?.scopes.filter((s) => s.kind === "team") ?? [], [data]);

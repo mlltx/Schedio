@@ -2,7 +2,7 @@
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { Waypoints } from "lucide-react";
-import { getJobDetail, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
+import { getJobDetail, mockConnector, resolvePollIntervalMs, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
 import { usePromise } from "./usePromise";
@@ -78,10 +78,14 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
   ref,
 ) {
   const tenant = useTenantConfig();
-  const job = usePromise(async () => {
-    const result = await getJobDetail(jobId, { terms: tenant.terminology, connector });
-    return result ?? null;
-  }, [jobId, tenant.terminology, connector]);
+  const job = usePromise(
+    async () => {
+      const result = await getJobDetail(jobId, { terms: tenant.terminology, connector });
+      return result ?? null;
+    },
+    [jobId, tenant.terminology, connector],
+    resolvePollIntervalMs(connector ?? mockConnector),
+  );
 
   const rootClassName = cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className);
 

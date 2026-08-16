@@ -59,6 +59,7 @@ doesn't need to know it's being combined, or with what.
 | `scopeStrategy` | `"instance"` \| `"tag"` | `"instance"` | See below. |
 | `graceMinutes` | `number` | `20` | How long past expected before a run reads as late/missing. |
 | `durationSampleSize` | `number` | `10` | Recent runs averaged for a DAG's expected duration. |
+| `pollIntervalMs` | `number` | `30_000` (from `@schedio/embed`) | How often a Schedio view re-polls this connector. `0` disables polling. See "Polling" below. |
 | `fetchImpl` | `typeof fetch` | global `fetch` | Override for tests. |
 
 **Scope strategy** — `"instance"` puts every DAG in this Airflow into one
@@ -67,6 +68,20 @@ tagging discipline. `"tag"` uses each DAG's first tag as its scope
 (untagged DAGs share one fallback scope so nothing silently disappears);
 more useful once this instance's DAG tags reliably reflect team/domain
 ownership, but only as good as that tagging discipline actually is.
+
+## Polling
+
+Schedio doesn't get pushed updates from Airflow — a Schedio view showing
+this connector re-fetches automatically every 30 seconds by default (see
+`@schedio/embed`'s README for how this works generally: it's a plain
+timer re-running the connector, paused while the browser tab isn't
+visible). That means **every poll fetches every DAG's run history again,
+in parallel, per open browser tab** — the same request pattern described
+in "Mapping" below, just repeating. 30s is fine for a handful of viewers
+against a normally-provisioned Airflow webserver; raise
+`pollIntervalMs` (or set it to `0` to disable polling and rely on manual
+refresh) if you have many concurrent viewers, a large number of DAGs, or
+a webserver you'd rather not hammer on a timer.
 
 ## Mapping
 

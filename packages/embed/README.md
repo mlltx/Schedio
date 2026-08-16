@@ -107,6 +107,53 @@ where the raw data came from. `showDemoControls` defaults to `false` once
 you pass a real `connector` (the built-in outage simulator only makes
 sense against the mock).
 
+## Staying up to date: polling
+
+Every component re-polls its connector automatically — **every 30 seconds
+by default, on by default** — so a view left open picks up new data
+without the visitor doing anything. This is genuinely how fresh the data
+gets: nothing here pushes updates from your backend to Schedio, it's
+`ConnectorFn` called again on a timer.
+
+The interval is configured **on the connector itself**, not as a prop on
+`GlanceView`/`JobDetail`/`PipelineGraphView` — set it once where you
+already configure the connector, and every component rendering it
+inherits it automatically:
+
+```ts
+import type { ConnectorFn } from "@schedio/embed";
+
+const myConnector: ConnectorFn = async (now, reachabilityOverrides) => { ... };
+myConnector.pollIntervalMs = 60_000; // poll every 60s instead of the 30s default
+// myConnector.pollIntervalMs = 0;   // disable polling for this connector entirely
+```
+
+`createAirflowConnector` (and any connector following the same pattern)
+exposes this as a plain config field instead —
+`createAirflowConnector({ pollIntervalMs: 60_000, ... })` — since setting
+a function property directly isn't something a connector's own consumer
+should need to know about; that's an implementation detail of how the
+interval travels from the connector to the component, not part of a
+connector package's own public config surface.
+
+`combineConnectors` polls at whichever of its sources wants the fastest
+cadence (a source that didn't set anything implicitly wants the 30s
+default, same as any other connector) — the combined result only stops
+polling if every single source explicitly disabled it.
+
+Polling pauses while the browser tab isn't visible (Page Visibility API),
+so an open-but-backgrounded tab doesn't keep hitting a real connector's
+API on a timer for no one to see, and catches up with an immediate
+refetch the moment the tab becomes visible again rather than waiting out
+whatever's left of the current interval.
+
+**If you're pointing this at a real backend, size the interval to your
+backend's tolerance, not just Schedio's** — every poll re-runs the same
+fetch that renders the view (for `@schedio/connector-airflow`, that means
+re-fetching every DAG's run history, in parallel, per open tab). 30s is a
+reasonable default for a handful of users; a large team or an instance
+with many jobs may want a longer interval.
+
 ## Multiple connectors at once
 
 `combineConnectors` merges several connectors — several instances of the
