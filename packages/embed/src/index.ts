@@ -40,6 +40,7 @@ export type { TenantConfig, Brand, BrandColors, TenantCopy } from "./config/type
 export {
   getScopes,
   getGlanceView,
+  getAllScopeStatuses,
   getJobDetail,
   DEFAULT_TERMINOLOGY,
   mockConnector,

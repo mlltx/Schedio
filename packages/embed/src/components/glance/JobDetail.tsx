@@ -2,31 +2,51 @@
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
-import { getJobDetail, type ConnectorFn, type Terminology } from "@/model";
+import { getJobDetail, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
-import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
+import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";
+import { NavLink } from "./NavLink";
+import { formatShortDateTime } from "./format";
 
-function formatClock(iso?: string) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-const RUN_STATUS_LABEL: Record<string, string> = {
+const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   success: "Succeeded",
   failed: "Failed",
   running: "Running",
   retrying: "Retrying",
 };
 
+const RUN_STATUS_VISUAL: Record<RunStatus, Visual> = {
+  success: SEVERITY_VISUAL.healthy,
+  failed: SEVERITY_VISUAL.needs_attention,
+  retrying: SEVERITY_VISUAL.recovering,
+  running: SEVERITY_VISUAL.late,
+};
+
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function TagGroup({ heading, names }: { heading: string; names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <div>
+      <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+        {heading}
+      </h2>
+      <div className="flex flex-wrap gap-1.5">
+        {names.map((name) => (
+          <span
+            key={name}
+            className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+          >
+            {name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const defaultLoading = () => (
@@ -55,33 +75,17 @@ export interface JobDetailProps {
 }
 
 function BackLink({ backHref, onBack }: Pick<JobDetailProps, "backHref" | "onBack">) {
-  const className =
-    "mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200";
-  const content = (
-    <>
+  if (!backHref && !onBack) return null;
+  return (
+    <NavLink
+      href={backHref}
+      onActivate={onBack}
+      className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+    >
       <ArrowLeft className="h-4 w-4" aria-hidden />
       Back to glance
-    </>
+    </NavLink>
   );
-  if (backHref) {
-    return (
-      <a
-        href={backHref}
-        onClick={onBack ? (e) => (e.preventDefault(), onBack()) : undefined}
-        className={className}
-      >
-        {content}
-      </a>
-    );
-  }
-  if (onBack) {
-    return (
-      <button type="button" onClick={onBack} className={className}>
-        {content}
-      </button>
-    );
-  }
-  return null;
 }
 
 export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function JobDetail(
@@ -174,40 +178,8 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
 
       {(job.dependsOnNames.length > 0 || job.blocksDownstream.length > 0) && (
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          {job.dependsOnNames.length > 0 && (
-            <div>
-              <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-                Waits on
-              </h2>
-              <div className="flex flex-wrap gap-1.5">
-                {job.dependsOnNames.map((name) => (
-                  <span
-                    key={name}
-                    className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                  >
-                    {name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {job.blocksDownstream.length > 0 && (
-            <div>
-              <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-                Other {terms.jobs} wait on this
-              </h2>
-              <div className="flex flex-wrap gap-1.5">
-                {job.blocksDownstream.map((name) => (
-                  <span
-                    key={name}
-                    className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                  >
-                    {name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          <TagGroup heading="Waits on" names={job.dependsOnNames} />
+          <TagGroup heading={`Other ${terms.jobs} wait on this`} names={job.blocksDownstream} />
         </div>
       )}
 
@@ -219,31 +191,21 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
           <p className="text-sm text-zinc-500 dark:text-zinc-400">No {terms.runs} recorded yet.</p>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {job.recentRuns.map((run, i) => {
-              const runVisual =
-                run.status === "success"
-                  ? SEVERITY_VISUAL.healthy
-                  : run.status === "failed"
-                    ? SEVERITY_VISUAL.needs_attention
-                    : run.status === "retrying"
-                      ? SEVERITY_VISUAL.recovering
-                      : SEVERITY_VISUAL.late;
-              return (
-                <div
-                  key={`${run.scheduledAt}-${i}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm dark:border-zinc-800"
-                >
-                  <span className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${runVisual.dot}`} />
-                    {formatClock(run.scheduledAt)}
-                  </span>
-                  <span className="text-right text-zinc-500 dark:text-zinc-400">
-                    {RUN_STATUS_LABEL[run.status] ?? run.status}
-                    {run.errorSummary ? ` — ${run.errorSummary}` : ""}
-                  </span>
-                </div>
-              );
-            })}
+            {job.recentRuns.map((run, i) => (
+              <div
+                key={`${run.scheduledAt}-${i}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm dark:border-zinc-800"
+              >
+                <span className="flex items-center gap-2.5 text-zinc-700 dark:text-zinc-300">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${RUN_STATUS_VISUAL[run.status].dot}`} />
+                  {formatShortDateTime(run.scheduledAt)}
+                </span>
+                <span className="text-right text-zinc-500 dark:text-zinc-400">
+                  {RUN_STATUS_LABEL[run.status]}
+                  {run.errorSummary ? ` — ${run.errorSummary}` : ""}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </div>

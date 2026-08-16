@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
-import type { JobStatus } from "@/model";
+import type { JobStatus, Terminology } from "@/model";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
+import { NavLink } from "./NavLink";
 import type { JobNavigation } from "./navigation";
 
 const rowClasses =
@@ -8,15 +9,17 @@ const rowClasses =
 
 export function ExceptionRow({
   status,
+  terms,
   onOutageClick,
   getJobHref,
   onJobSelect,
 }: {
   status: JobStatus;
+  terms: Terminology;
   onOutageClick?: (scopeId: string) => void;
 } & JobNavigation) {
   const visual = SEVERITY_VISUAL[status.severity];
-  const isOutage = status.jobId.startsWith("__outage__");
+  const isOutage = status.severity === "outage";
 
   const content = (
     <>
@@ -27,7 +30,7 @@ export function ExceptionRow({
           <span className="text-xs text-zinc-400 dark:text-zinc-500">{status.owner}</span>
           {status.baseline.isTypicalToday === false && (
             <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-              unusual for this job
+              unusual for this {terms.job}
             </span>
           )}
         </span>
@@ -45,28 +48,15 @@ export function ExceptionRow({
 
   if (isOutage) {
     return (
-      <button type="button" onClick={() => onOutageClick?.(status.scopeId)} className={rowClasses}>
+      <NavLink onActivate={() => onOutageClick?.(status.scopeId)} className={rowClasses}>
         {content}
-      </button>
-    );
-  }
-
-  const href = getJobHref?.(status.jobId);
-  if (href) {
-    return (
-      <a
-        href={href}
-        onClick={onJobSelect ? (e) => (e.preventDefault(), onJobSelect(status.jobId)) : undefined}
-        className={rowClasses}
-      >
-        {content}
-      </a>
+      </NavLink>
     );
   }
 
   return (
-    <button type="button" onClick={() => onJobSelect?.(status.jobId)} className={rowClasses}>
+    <NavLink href={getJobHref?.(status.jobId)} onActivate={onJobSelect && (() => onJobSelect(status.jobId))} className={rowClasses}>
       {content}
-    </button>
+    </NavLink>
   );
 }

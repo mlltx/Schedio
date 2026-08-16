@@ -115,10 +115,9 @@ export function classifyJob({
     };
   }
 
-  const sorted = [...runs].sort(
-    (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+  const latest = runs.reduce((mostRecent, run) =>
+    new Date(run.scheduledAt).getTime() > new Date(mostRecent.scheduledAt).getTime() ? run : mostRecent,
   );
-  const latest = sorted[0];
   const graceMs = job.sla.graceMinutes * MS;
   const expectedDurationMs = job.sla.expectedDurationMinutes * MS;
   const baseline = computeBaseline(runs, now);

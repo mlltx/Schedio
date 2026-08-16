@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { getScopes, getGlanceView, type ConnectorFn, type ScopeStatus, type TimeWindow } from "@/model";
+import { getScopes, getAllScopeStatuses, type ConnectorFn, type TimeWindow } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
 import { ScopeSwitcher } from "./ScopeSwitcher";
@@ -45,22 +45,14 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("since_midnight");
   const [reachabilityOverrides, setReachabilityOverrides] = useState<Record<string, boolean>>({});
 
-  // Every scope's status is cheap to compute, and the switcher needs all of
-  // them at once (to show a status dot per scope) — so fetch the whole set
-  // together and let the selected view be a lookup into it.
-  const scopeStatuses = usePromise(async () => {
-    const entries = await Promise.all(
-      scopes.map(async (scope) => {
-        const view = await getGlanceView(scope.id, timeWindow, {
-          reachabilityOverrides,
-          terms: tenant.terminology,
-          connector,
-        });
-        return [scope.id, view] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as Record<string, ScopeStatus>;
-  }, [timeWindow, reachabilityOverrides, tenant.terminology, connector]);
+  // The switcher needs every scope's status at once (to show a status dot
+  // per scope) — getAllScopeStatuses fetches the connector snapshot and
+  // classifies every job exactly once and rolls up all scopes from that,
+  // rather than repeating the fetch+classify work once per scope.
+  const scopeStatuses = usePromise(
+    () => getAllScopeStatuses(timeWindow, { reachabilityOverrides, terms: tenant.terminology, connector }),
+    [timeWindow, reachabilityOverrides, tenant.terminology, connector],
+  );
 
   const headlineByScope = useMemo(() => {
     if (!scopeStatuses) return {};
@@ -109,6 +101,7 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
           <ExceptionList
             exceptions={view.exceptions}
             heading={tenant.copy.exceptionsHeading}
+            terms={tenant.terminology}
             onOutageClick={setSelectedScopeId}
             getJobHref={getJobHref}
             onJobSelect={onJobSelect}

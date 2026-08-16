@@ -125,8 +125,6 @@ export interface JobStatus {
     isTypicalToday: boolean;
   };
   hasHistory: boolean;
-  /** True when this run happened outside the currently selected time window. */
-  asOfLastCheck?: boolean;
 }
 
 export type HeadlineKind =

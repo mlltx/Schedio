@@ -332,13 +332,7 @@ export type ConnectorFn = (
   reachabilityOverrides: Record<string, boolean>,
 ) => ConnectorSnapshot | Promise<ConnectorSnapshot>;
 
-export const mockConnector: ConnectorFn = (now, reachabilityOverrides) =>
-  fetchConnectorSnapshot(now, reachabilityOverrides);
-
-export function fetchConnectorSnapshot(
-  now: Date,
-  reachabilityOverrides: Record<string, boolean> = {},
-): ConnectorSnapshot {
+export const mockConnector: ConnectorFn = (now, reachabilityOverrides = {}): ConnectorSnapshot => {
   const runsByJobId = new Map<string, Run[]>();
   const jobs = JOBS.map((job) => effectiveJob(job, now));
 
@@ -364,4 +358,4 @@ export function fetchConnectorSnapshot(
     reachableScopeIds,
     lastSyncedAt: new Date(now.getTime() - 52 * MS).toISOString(),
   };
-}
+};

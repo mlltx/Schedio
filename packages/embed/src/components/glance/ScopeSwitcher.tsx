@@ -31,7 +31,7 @@ export function ScopeSwitcher({
                 : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-700"
             }`}
           >
-            {visual && scope.id !== "all" && (
+            {visual && scope.kind !== "all" && (
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isSelected ? "bg-current" : visual.dot}`} />
             )}
             {scope.name}

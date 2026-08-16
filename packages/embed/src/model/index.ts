@@ -122,22 +122,36 @@ export interface GlanceViewOptions {
   connector?: ConnectorFn;
 }
 
-export async function getGlanceView(
-  scopeId: string,
-  window: TimeWindow,
-  options: GlanceViewOptions = {},
-): Promise<ScopeStatus> {
+interface PreparedData {
+  now: Date;
+  terms: Terminology;
+  snapshot: ConnectorSnapshot;
+  statusMap: Map<string, JobStatus>;
+}
+
+/**
+ * Fetches the connector snapshot and classifies every job exactly once.
+ * Neither step depends on which scope or time window is being viewed, so
+ * this is shared across every scope's rollup rather than repeated per
+ * scope — see `getAllScopeStatuses`, which is what makes the glance
+ * view's "compute every scope's status dot at once" usage cheap instead
+ * of re-fetching and re-classifying the whole dataset once per scope.
+ */
+async function prepareData(options: GlanceViewOptions): Promise<PreparedData> {
   const now = options.now ?? new Date();
   const terms = options.terms ?? DEFAULT_TERMINOLOGY;
   const connector = options.connector ?? mockConnector;
   const snapshot = await connector(now, options.reachabilityOverrides ?? {});
   const statusMap = classifyAllJobs(snapshot, now, terms);
+  return { now, terms, snapshot, statusMap };
+}
 
-  const scope = SCOPES.find((s) => s.id === scopeId) ?? SCOPES[0];
-  const scopeJobs =
-    scopeId === "all" ? snapshot.jobs.filter((j) => j.scopeId !== "all") : snapshot.jobs.filter((j) => j.scopeId === scopeId);
+function buildScopeStatus(scope: Scope, window: TimeWindow, { now, terms, snapshot, statusMap }: PreparedData): ScopeStatus {
+  const isAggregate = scope.kind === "all";
+  const scopeJobs = isAggregate
+    ? snapshot.jobs.filter((j) => j.scopeId !== scope.id)
+    : snapshot.jobs.filter((j) => j.scopeId === scope.id);
 
-  const isAggregate = scopeId === "all";
   const childScopeIds = [...new Set(scopeJobs.map((j) => j.scopeId))];
   const unreachableChildScopes = childScopeIds
     .filter((id) => !snapshot.reachableScopeIds.has(id))
@@ -147,7 +161,7 @@ export async function getGlanceView(
   // below via a synthetic row), not grounds for the whole aggregate to
   // read as "can't confirm anything". That banner is reserved for viewing
   // an unreachable scope directly.
-  const ownConnectorReachable = isAggregate ? true : snapshot.reachableScopeIds.has(scopeId);
+  const ownConnectorReachable = isAggregate ? true : snapshot.reachableScopeIds.has(scope.id);
 
   const jobStatuses = scopeJobs.map((j) => statusMap.get(j.id)!).filter(Boolean);
   const start = windowStart(window, now);
@@ -159,21 +173,20 @@ export async function getGlanceView(
 
   // When viewing the aggregate, a child scope going dark shows up as its
   // own exception row rather than a silent gap in the numbers.
-  const syntheticOutageExceptions: JobStatus[] =
-    isAggregate
-      ? unreachableChildScopes.map(({ id, name }) => ({
-          jobId: `__outage__${id}`,
-          jobName: `${name} connector`,
-          owner: name,
-          scopeId: id,
-          severity: "outage",
-          headline: "Can't confirm status",
-          detail: `We lost contact with ${name}'s data source ${formatRelative(snapshot.lastSyncedAt, now)}. Its ${terms.jobs} aren't included in the counts above until this reconnects.`,
-          blocksDownstream: [],
-          baseline: { failureRatePercent: 0, isTypicalToday: true },
-          hasHistory: true,
-        }))
-      : [];
+  const syntheticOutageExceptions: JobStatus[] = isAggregate
+    ? unreachableChildScopes.map(({ id, name }) => ({
+        jobId: `__outage__${id}`,
+        jobName: `${name} connector`,
+        owner: name,
+        scopeId: id,
+        severity: "outage",
+        headline: "Can't confirm status",
+        detail: `We lost contact with ${name}'s data source ${formatRelative(snapshot.lastSyncedAt, now)}. Its ${terms.jobs} aren't included in the counts above until this reconnects.`,
+        blocksDownstream: [],
+        baseline: { failureRatePercent: 0, isTypicalToday: true },
+        hasHistory: true,
+      }))
+    : [];
 
   const allExceptions = [...syntheticOutageExceptions, ...exceptions].sort(
     (a, b) => SEVERITY_RANK.indexOf(a.severity) - SEVERITY_RANK.indexOf(b.severity),
@@ -223,18 +236,33 @@ export async function getGlanceView(
   };
 }
 
+export async function getGlanceView(scopeId: string, window: TimeWindow, options: GlanceViewOptions = {}): Promise<ScopeStatus> {
+  const scope = SCOPES.find((s) => s.id === scopeId) ?? SCOPES[0];
+  const prepared = await prepareData(options);
+  return buildScopeStatus(scope, window, prepared);
+}
+
+/**
+ * Every scope's status in one fetch — for a switcher that needs to show a
+ * status dot per scope, this is the difference between fetching and
+ * classifying the whole dataset once vs. once per scope.
+ */
+export async function getAllScopeStatuses(
+  window: TimeWindow,
+  options: GlanceViewOptions = {},
+): Promise<Record<string, ScopeStatus>> {
+  const prepared = await prepareData(options);
+  return Object.fromEntries(SCOPES.map((scope) => [scope.id, buildScopeStatus(scope, window, prepared)]));
+}
+
 export async function getJobDetail(
   jobId: string,
   options: GlanceViewOptions = {},
 ): Promise<JobDetailView | undefined> {
-  const now = options.now ?? new Date();
-  const terms = options.terms ?? DEFAULT_TERMINOLOGY;
-  const connector = options.connector ?? mockConnector;
-  const snapshot = await connector(now, options.reachabilityOverrides ?? {});
+  const { snapshot, statusMap } = await prepareData(options);
   const job = snapshot.jobs.find((j) => j.id === jobId);
   if (!job) return undefined;
 
-  const statusMap = classifyAllJobs(snapshot, now, terms);
   const status = statusMap.get(jobId)!;
   const jobsById = new Map(snapshot.jobs.map((j) => [j.id, j]));
   const runs = (snapshot.runsByJobId.get(jobId) ?? [])
@@ -244,19 +272,11 @@ export async function getJobDetail(
   const scope = SCOPES.find((s) => s.id === job.scopeId);
 
   return {
-    jobId: job.id,
-    jobName: job.name,
-    owner: job.owner,
-    scopeId: job.scopeId,
+    ...status,
     scopeName: scope?.name ?? job.scopeId,
-    severity: status.severity,
-    headline: status.headline,
-    detail: status.detail,
     cadenceLabel: CADENCE_LABEL[job.schedule.cadence],
     expectedDurationLabel: formatDurationMinutes(job.sla.expectedDurationMinutes),
     dependsOnNames: job.dependsOn.map((id) => jobsById.get(id)?.name ?? id),
-    blocksDownstream: status.blocksDownstream,
-    latestRun: status.latestRun,
     recentRuns: runs.slice(0, 10).map((r) => ({
       status: r.status,
       scheduledAt: r.scheduledAt,
@@ -264,6 +284,5 @@ export async function getJobDetail(
       endedAt: r.endedAt,
       errorSummary: r.errorSummary,
     })),
-    baseline: status.baseline,
   };
 }

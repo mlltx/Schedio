@@ -1,16 +1,18 @@
-import type { JobStatus } from "@/model";
+import type { JobStatus, Terminology } from "@/model";
 import { ExceptionRow } from "./ExceptionRow";
 import type { JobNavigation } from "./navigation";
 
 export function ExceptionList({
   exceptions,
   heading,
+  terms,
   onOutageClick,
   getJobHref,
   onJobSelect,
 }: {
   exceptions: JobStatus[];
   heading: string;
+  terms: Terminology;
   onOutageClick?: (scopeId: string) => void;
 } & JobNavigation) {
   if (exceptions.length === 0) return null;
@@ -25,6 +27,7 @@ export function ExceptionList({
           <ExceptionRow
             key={status.jobId}
             status={status}
+            terms={terms}
             onOutageClick={onOutageClick}
             getJobHref={getJobHref}
             onJobSelect={onJobSelect}

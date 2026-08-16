@@ -1,4 +1,5 @@
 import type { TrendPoint } from "@/model";
+import { formatShortDate } from "./format";
 
 /**
  * Fourteen days of failure counts as a row of bars, so "3 failures today"
@@ -16,7 +17,7 @@ export function TrendSparkline({ trend }: { trend: TrendPoint[] }) {
         return (
           <div
             key={point.date}
-            title={`${new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${point.failedCount} failure${point.failedCount === 1 ? "" : "s"}`}
+            title={`${formatShortDate(point.date)}: ${point.failedCount} failure${point.failedCount === 1 ? "" : "s"}`}
             className="flex h-9 w-3 items-end sm:w-3.5"
           >
             <div
