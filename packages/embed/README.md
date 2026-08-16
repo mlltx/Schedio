@@ -153,6 +153,11 @@ own `TenantSwitcherBar`/`AppTenantProvider` for the intended pattern if
 you want the same "preview several configs" behavior we use for our own
 demo.
 
-`getScopes`, `getGlanceView`, `getJobDetail` are also exported directly if
-you want to build your own UI on top of the same computed data instead of
-using `GlanceView`/`JobDetail` as-is.
+`getScopes`, `getGlanceView`, `getAllScopeStatuses`, `getJobDetail` are
+also exported directly if you want to build your own UI on top of the
+same computed data instead of using `GlanceView`/`JobDetail` as-is.
+`getAllScopeStatuses(window, options)` is what `GlanceView` itself calls
+internally — it fetches and classifies once and returns every scope's
+`ScopeStatus` in one call, which is the one to reach for if you need more
+than one scope's status (e.g. `getGlanceView` for a single scope, called
+in a loop, redoes that shared work on every call).
