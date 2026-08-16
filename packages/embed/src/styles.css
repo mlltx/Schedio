@@ -1,1 +1,11 @@
 @import "tailwindcss" source("./");
+@import "@xyflow/react/dist/style.css";
+
+:root {
+  --schedio-graph-dot: #e4e4e7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --schedio-graph-dot: #27272a;
+  }
+}

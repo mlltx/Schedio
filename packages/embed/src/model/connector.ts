@@ -1,5 +1,5 @@
 import type { Job, Run, RunStatus, Schedule } from "./types";
-import { JOBS, JOBS_BY_SCOPE } from "./seed-data";
+import { CORE_PLATFORM_INCIDENT_ROOT_ID, JOBS, JOBS_BY_SCOPE } from "./seed-data";
 
 /**
  * Stands in for a real scheduler connector (Airflow, Dagster, Temporal...).
@@ -273,8 +273,90 @@ const SCENARIOS: Record<string, ScenarioOverride> = {
   },
 };
 
+/**
+ * Core Platform's incident: `CORE_PLATFORM_INCIDENT_ROOT_ID` fails outright,
+ * and every job downstream of it (any number of hops away) shows as
+ * "missing" — it genuinely never got fresh input, so it genuinely never
+ * ran. The affected set is computed by walking `dependsOn` forward from the
+ * root rather than hand-listed, since a ~60-job pipeline is exactly the
+ * scale at which a hand-maintained list of "everything downstream of X"
+ * silently drifts out of date.
+ */
+const CADENCE_HOURS: Record<Job["schedule"]["cadence"], number> = {
+  hourly: 1,
+  every_6_hours: 6,
+  daily: 24,
+  weekly: 24 * 7,
+  monthly: 24 * 30,
+};
+
+/** How far back to strip a job's history to guarantee it reads as overdue, regardless of its own cadence. */
+function overdueStripHours(job: Job): number {
+  return CADENCE_HOURS[job.schedule.cadence] + job.sla.graceMinutes / 60 + 24;
+}
+
+function transitiveDependentIds(rootId: string, jobs: Job[]): string[] {
+  const dependents = new Map<string, string[]>();
+  for (const job of jobs) {
+    for (const depId of job.dependsOn) {
+      const arr = dependents.get(depId) ?? [];
+      arr.push(job.id);
+      dependents.set(depId, arr);
+    }
+  }
+
+  const affected: string[] = [];
+  const seen = new Set<string>([rootId]);
+  const queue = [rootId];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const childId of dependents.get(id) ?? []) {
+      if (!seen.has(childId)) {
+        seen.add(childId);
+        affected.push(childId);
+        queue.push(childId);
+      }
+    }
+  }
+  return affected;
+}
+
+function buildIncidentScenarios(): Record<string, ScenarioOverride> {
+  const jobsById = new Map(JOBS.map((j) => [j.id, j]));
+  const root = jobsById.get(CORE_PLATFORM_INCIDENT_ROOT_ID);
+  if (!root) return {};
+
+  const scenarios: Record<string, ScenarioOverride> = {
+    [root.id]: {
+      stripHours: 6,
+      inject: (now) => {
+        const scheduledAt = new Date(now.getTime() - 180 * MS);
+        const endedAt = new Date(now.getTime() - 130 * MS);
+        return {
+          id: `${root.id}@hero`,
+          jobId: root.id,
+          scheduledAt: scheduledAt.toISOString(),
+          startedAt: scheduledAt.toISOString(),
+          endedAt: endedAt.toISOString(),
+          status: "failed",
+          attempt: 1,
+          errorSummary: "Upstream order stream API returned 5xx for an extended window",
+        };
+      },
+    },
+  };
+
+  for (const jobId of transitiveDependentIds(root.id, JOBS)) {
+    const job = jobsById.get(jobId)!;
+    scenarios[jobId] = { stripHours: overdueStripHours(job) };
+  }
+  return scenarios;
+}
+
+const ALL_SCENARIOS: Record<string, ScenarioOverride> = { ...SCENARIOS, ...buildIncidentScenarios() };
+
 function applyScenario(jobId: string, runs: Run[], now: Date): Run[] {
-  const scenario = SCENARIOS[jobId];
+  const scenario = ALL_SCENARIOS[jobId];
   if (!scenario) return runs;
 
   const cutoff = now.getTime() - scenario.stripHours * 60 * MS;

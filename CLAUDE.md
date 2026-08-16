@@ -93,7 +93,7 @@ packages/embed/src/model/
                 baseline/normalcy, and all plain-language copy generation
   index.ts      the *only* module anything outside src/model/ may import
                 from — the public API (getScopes, getGlanceView,
-                getJobDetail, both async)
+                getJobDetail, getDependencyGraph, all async)
 ```
 
 `packages/embed/src/components/glance/` consumes only `@/model`'s computed
@@ -137,6 +137,46 @@ hatches (`forwardRef`, `className`/`style` merged onto the root,
 for the full props reference. Keep these in sync if you add new top-level
 components: a component meant to be embedded that can't be ref'd, styled,
 or have its loading state overridden doesn't fit the pattern.
+
+### The dependency graph
+
+`components/graph/` is a real graph view, not text pill lists: `JobDetail`
+embeds a compact "job plus one hop each way" neighborhood inline (computed
+free-of-charge inside `getJobDetail`, via a shared `buildDependencyGraph`
+helper in `model/index.ts` — no second connector round-trip just to draw a
+few nodes it already has data for); `PipelineGraphView` is the "view full
+pipeline" destination, a separate top-level component for the whole
+connected pipeline, mounted at its own host route the same way
+`JobDetail`/`GlanceView` are (`getPipelineHref`/`onViewPipeline` on
+`JobDetail`, the same doorway pattern as everywhere else). Both render
+through the shared `DependencyGraphCanvas`.
+
+An edge renders differently when its upstream node is a live cause of
+downstream trouble (`isProblem` in `GraphNode`/`GraphEdge`, computed in
+`model/index.ts` straight from the already-computed `statusMap` —
+`compute.ts` gains no new logic for this). Node color/severity styling
+reuses `SEVERITY_VISUAL` from `components/glance/visuals.ts` — the graph
+introduces zero new colors or vocabulary to learn.
+
+Two dependencies exist solely for this: `@dagrejs/dagre` (auto-layout —
+hand-computed columns don't hold up once a pipeline is more than a few
+hops) and `@xyflow/react` (pan/zoom/render). Both are regular
+`dependencies` in `packages/embed/package.json`, like `lucide-react`
+already was — tsup leaves them external and `npm install`ing
+`@schedio/embed` pulls them in transitively, nothing extra for a host.
+`PipelineGraphView` defaults to auto-focusing the camera on whatever's
+broken (plus one hop of context) rather than fitting the whole graph once
+a pipeline passes ~15 jobs — see `seed-data.ts`'s "Core Platform" scope (a
+deliberately large ~60-job pipeline with a scripted cascading failure in
+`connector.ts`) for the scenario this is stress-tested against.
+
+**CSS gotcha if you touch this again:** React Flow's own stylesheet must
+only be imported via `src/styles.css` (which `build-css.mjs` scopes under
+`.schedio-embed-root` like everything else) — never `import
+"@xyflow/react/dist/style.css"` directly in a component. tsup leaves that
+import in the compiled `dist/index.js` verbatim (unlike Tailwind classes,
+CSS `@import`s aren't scoped by our build), which would leak React Flow's
+unscoped base styles straight onto the host's page.
 
 ### Tenant config (branding + terminology)
 

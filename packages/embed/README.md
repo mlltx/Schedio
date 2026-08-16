@@ -43,7 +43,28 @@ export function StatusPage() {
 import { JobDetail } from "@schedio/embed";
 
 export function JobStatusPage({ jobId }: { jobId: string }) {
-  return <JobDetail jobId={jobId} backHref="/status" onBack={() => router.push("/status")} />;
+  return (
+    <JobDetail
+      jobId={jobId}
+      backHref="/status"
+      onBack={() => router.push("/status")}
+      getPipelineHref={(id) => `/status/${id}/pipeline`}
+      onViewPipeline={(id) => router.push(`/status/${id}/pipeline`)}
+    />
+  );
+}
+```
+
+```tsx
+import { PipelineGraphView } from "@schedio/embed";
+
+export function PipelinePage({ jobId }: { jobId: string }) {
+  // Needs real height from its container — see "The dependency graph" below.
+  return (
+    <div style={{ height: "100vh" }}>
+      <PipelineGraphView jobId={jobId} backHref={`/status/${jobId}`} onBack={() => router.push(`/status/${jobId}`)} />
+    </div>
+  );
 }
 ```
 
@@ -113,6 +134,41 @@ example configs) are exported if you want a starting point.
 Comprehension depends on those meaning the same thing everywhere — see
 "White-label by design" in `MISSION.md`.
 
+## The dependency graph
+
+`JobDetail` renders a compact dependency neighborhood inline — the job plus
+its immediate upstream/downstream jobs — in place of a plain text list.
+It's free: `getJobDetail` already computes it as part of the same fetch, no
+extra round-trip. An edge is drawn differently when the upstream job is the
+actual reason something downstream is stuck, using severity data the model
+already computes — nothing new to derive.
+
+For the whole connected pipeline (not just one hop), wire up
+`getPipelineHref`/`onViewPipeline` on `JobDetail` and mount `PipelineGraphView`
+at that route:
+
+```tsx
+import { PipelineGraphView } from "@schedio/embed";
+
+<PipelineGraphView jobId={jobId} backHref={`/jobs/${jobId}`} onBack={() => router.push(`/jobs/${jobId}`)} />;
+```
+
+Built for real scale from the start — pipelines with dozens or hundreds of
+jobs, not just the 2-4 hop chains a small team might have. Auto-layout comes
+from `@dagrejs/dagre`; panning/zooming/rendering from `@xyflow/react` (both
+are regular `dependencies`, so `npm install`ing `@schedio/embed` pulls them
+in automatically — nothing extra for a host to add). Past ~15 jobs, the view
+defaults to focusing the camera on whatever's actually broken (plus one hop
+of context) rather than fitting the whole graph, with a toggle to see
+everything and a search box to jump to a specific job by name.
+
+`PipelineGraphView` fills its container — mount it somewhere with a real
+height (`height: 100vh`, a flex child with a definite cross-size, etc.), not
+inside normal document flow. `getDependencyGraph(jobId, { depth })` is also
+exported directly if you want to build a different graph UI on the same
+computed nodes/edges; omit `depth` (or pass `Infinity`) for the whole
+pipeline, `1` for just the immediate neighbors.
+
 ## Props reference
 
 **`GlanceView`**
@@ -135,27 +191,50 @@ Comprehension depends on those meaning the same thing everywhere — see
 | `connector` | `ConnectorFn` | built-in mock | |
 | `backHref` | `string` | — | real `href` for "Back to glance" |
 | `onBack` | `() => void` | — | client-side routing callback |
+| `getJobHref` | `(jobId) => string` | — | real `href` for a neighbor node in the dependency graph |
+| `onJobSelect` | `(jobId) => void` | — | client-side routing callback for a neighbor node |
+| `getPipelineHref` | `(jobId) => string` | — | real `href` for "View full pipeline" |
+| `onViewPipeline` | `(jobId) => void` | — | client-side routing callback for "View full pipeline" |
 | `renderLoading` | `() => ReactNode` | built-in skeleton | |
 | `renderNotFound` | `() => ReactNode` | built-in message | shown (below the back link) when `jobId` doesn't resolve |
 | `className`, `style` | — | — | merged onto the root element |
 | `ref` | `Ref<HTMLDivElement>` | — | forwarded to the root element |
 
-`getJobHref`/`onJobSelect` and `backHref`/`onBack` are composable the same
-way `next/link` works internally: give a real href for accessibility/
+**`PipelineGraphView`**
+
+| Prop | Type | Default | |
+|---|---|---|---|
+| `jobId` | `string` | required | |
+| `connector` | `ConnectorFn` | built-in mock | |
+| `backHref` | `string` | — | real `href` for "Back to job" |
+| `onBack` | `() => void` | — | client-side routing callback |
+| `getJobHref` | `(jobId) => string` | — | real `href` for a node in the graph |
+| `onJobSelect` | `(jobId) => void` | — | client-side routing callback for a node |
+| `renderLoading` | `() => ReactNode` | built-in skeleton | |
+| `renderNotFound` | `() => ReactNode` | built-in message | |
+| `className`, `style` | — | — | merged onto the root element |
+| `ref` | `Ref<HTMLDivElement>` | — | forwarded to the root element |
+
+Every `getXHref`/`onXSelect` pair above is composable the same way
+`next/link` works internally: give a real href for accessibility/
 middle-click, a callback for client-side routing, or both.
 
-## What's exported but not part of the core two components
+## What's exported but not part of the core components
 
 `TenantSwitcher` and `DemoControls` are exported for anyone building a
 similar admin/preview surface, but `GlanceView` doesn't render a tenant
-switcher itself — a real deployment has exactly one brand. See `web/`'s
-own `TenantSwitcherBar`/`AppTenantProvider` for the intended pattern if
+switcher itself — a real deployment has exactly one brand. `DependencyGraphCanvas`
+(the renderer both `JobDetail`'s inline neighborhood and `PipelineGraphView`
+are built on) is exported too, if you want a custom graph layout of your
+own. See `web/`'s own `TenantSwitcherBar`/`AppTenantProvider` for the
+intended pattern if
 you want the same "preview several configs" behavior we use for our own
 demo.
 
-`getScopes`, `getGlanceView`, `getAllScopeStatuses`, `getJobDetail` are
-also exported directly if you want to build your own UI on top of the
-same computed data instead of using `GlanceView`/`JobDetail` as-is.
+`getScopes`, `getGlanceView`, `getAllScopeStatuses`, `getJobDetail`,
+`getDependencyGraph` are also exported directly if you want to build your
+own UI on top of the same computed data instead of using
+`GlanceView`/`JobDetail`/`PipelineGraphView` as-is.
 `getAllScopeStatuses(window, options)` is what `GlanceView` itself calls
 internally — it fetches and classifies once and returns every scope's
 `ScopeStatus` in one call, which is the one to reach for if you need more

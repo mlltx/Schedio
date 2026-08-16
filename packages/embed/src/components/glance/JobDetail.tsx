@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Waypoints } from "lucide-react";
 import { getJobDetail, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
@@ -9,6 +9,8 @@ import { usePromise } from "./usePromise";
 import { cx } from "./cx";
 import { NavLink } from "./NavLink";
 import { formatShortDateTime } from "./format";
+import { DependencyGraphCanvas } from "../graph/DependencyGraphCanvas";
+import type { JobNavigation } from "./navigation";
 
 const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   success: "Succeeded",
@@ -28,27 +30,6 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function TagGroup({ heading, names }: { heading: string; names: string[] }) {
-  if (names.length === 0) return null;
-  return (
-    <div>
-      <h2 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-        {heading}
-      </h2>
-      <div className="flex flex-wrap gap-1.5">
-        {names.map((name) => (
-          <span
-            key={name}
-            className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-          >
-            {name}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const defaultLoading = () => (
   <div className="animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
 );
@@ -57,7 +38,7 @@ const defaultNotFound = (terms: Terminology) => (
   <p className="text-sm text-zinc-500 dark:text-zinc-400">This {terms.job} could not be found.</p>
 );
 
-export interface JobDetailProps {
+export interface JobDetailProps extends JobNavigation {
   jobId: string;
   /** Where the data comes from. Defaults to Schedio's built-in mock connector. */
   connector?: ConnectorFn;
@@ -65,6 +46,10 @@ export interface JobDetailProps {
   backHref?: string;
   /** Called when "Back to glance" is activated — use for client-side routing. */
   onBack?: () => void;
+  /** Real href for "View full pipeline" below the dependency graph, when this job has one. */
+  getPipelineHref?: (jobId: string) => string;
+  /** Called when "View full pipeline" is activated — use for client-side routing. */
+  onViewPipeline?: (jobId: string) => void;
   /** Replaces the default skeleton shown while the fetch is in flight. */
   renderLoading?: () => ReactNode;
   /** Replaces the default "This job could not be found" message. Still rendered below the back link. */
@@ -94,6 +79,10 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
     connector,
     backHref,
     onBack,
+    getPipelineHref,
+    onViewPipeline,
+    getJobHref,
+    onJobSelect,
     renderLoading = defaultLoading,
     renderNotFound,
     className,
@@ -176,10 +165,29 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
         </div>
       </dl>
 
-      {(job.dependsOnNames.length > 0 || job.blocksDownstream.length > 0) && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <TagGroup heading="Waits on" names={job.dependsOnNames} />
-          <TagGroup heading={`Other ${terms.jobs} wait on this`} names={job.blocksDownstream} />
+      {job.dependencyGraph.nodes.length > 1 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
+              Dependency graph
+            </h2>
+            {job.dependencyGraph.truncated && (getPipelineHref || onViewPipeline) && (
+              <NavLink
+                href={getPipelineHref?.(job.jobId)}
+                onActivate={onViewPipeline ? () => onViewPipeline(job.jobId) : undefined}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              >
+                <Waypoints className="h-3.5 w-3.5" aria-hidden />
+                View full pipeline
+              </NavLink>
+            )}
+          </div>
+          <DependencyGraphCanvas
+            graph={job.dependencyGraph}
+            variant="compact"
+            getJobHref={getJobHref}
+            onJobSelect={onJobSelect}
+          />
         </div>
       )}
 

@@ -172,10 +172,41 @@ export interface JobDetailView {
   expectedDurationLabel: string;
   dependsOnNames: string[];
   blocksDownstream: string[];
+  /** This job plus its immediate upstream/downstream neighbors — the inline graph on the job detail page. */
+  dependencyGraph: DependencyGraph;
   latestRun?: LatestRunView;
   recentRuns: LatestRunView[];
   baseline: {
     failureRatePercent: number;
     isTypicalToday: boolean;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Dependency graph: a job's neighborhood (or its whole connected pipeline)
+// as nodes + edges, for the graph view. Severity/headline on each node are
+// exactly what JobStatus already carries — the graph is a new shape for
+// existing computed data, not a new source of truth.
+// ---------------------------------------------------------------------------
+
+export interface GraphNode {
+  jobId: string;
+  jobName: string;
+  severity: Severity;
+  headline: string;
+}
+
+export interface GraphEdge {
+  fromJobId: string;
+  toJobId: string;
+  /** True when `fromJobId` is a live cause of trouble downstream (critical/needs_attention). */
+  isProblem: boolean;
+}
+
+export interface DependencyGraph {
+  focalJobId: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  /** True if depth-limiting cut off part of the graph — there's more to see via a higher/no depth. */
+  truncated: boolean;
 }

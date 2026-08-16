@@ -19,12 +19,402 @@ export const SCOPES: Scope[] = [
   { id: "support-ops", name: "Support Ops", kind: "team" },
   { id: "ml-platform", name: "ML Platform", kind: "team" },
   { id: "quarterly-ops", name: "Quarterly Ops", kind: "team" },
+  { id: "core-platform", name: "Core Platform", kind: "team" },
 ];
 
 const sla = (expectedDurationMinutes: number, graceMinutes = 20) => ({
   expectedDurationMinutes,
   graceMinutes,
 });
+
+/**
+ * Core Platform: a large, deep multi-layer pipeline (~60 jobs across six
+ * hops) that exists specifically to stress-test the dependency graph view at
+ * real scale — every other scope's chains are 2-4 hops on purpose, which is
+ * enough to prove the graph's correctness but not enough to prove it holds
+ * up on a pipeline a large org would actually have. See connector.ts for the
+ * scripted root-cause-failure that cascades through a chunk of this graph.
+ */
+const platformJob = (job: Omit<Job, "owner" | "scopeId">): Job => ({
+  ...job,
+  owner: "Core Platform",
+  scopeId: "core-platform",
+});
+
+const CORE_PLATFORM_DOMAINS = [
+  "orders",
+  "inventory",
+  "pricing",
+  "shipping",
+  "support",
+  "marketing",
+  "web-sessions",
+  "payments",
+  "catalog",
+  "fulfillment",
+];
+
+const domainLabel = (domain: string) => domain.replace("-", " ");
+
+// Layer 0 — raw ingestion, one per domain, hourly.
+const CORE_PLATFORM_SOURCES: Job[] = CORE_PLATFORM_DOMAINS.map((domain) =>
+  platformJob({
+    id: `ingest-${domain}-stream`,
+    name: `Ingest ${domainLabel(domain)} stream`,
+    schedule: { cadence: "hourly" },
+    sla: sla(10),
+    dependsOn: [],
+  }),
+);
+
+// Layer 1 — clean/validate, one per domain, hourly, depends on its own source.
+const CORE_PLATFORM_CLEAN: Job[] = CORE_PLATFORM_DOMAINS.map((domain) =>
+  platformJob({
+    id: `clean-${domain}-stream`,
+    name: `Clean ${domainLabel(domain)} stream`,
+    schedule: { cadence: "hourly" },
+    sla: sla(15),
+    dependsOn: [`ingest-${domain}-stream`],
+  }),
+);
+
+// Layer 2 — enrichment, daily. Fan-in starts here (some jobs merge 2-3 clean streams).
+const CORE_PLATFORM_ENRICH: Job[] = [
+  platformJob({
+    id: "enrich-order-records",
+    name: "Enrich order records",
+    schedule: { cadence: "daily", hour: 2, minute: 0 },
+    sla: sla(30),
+    dependsOn: ["clean-orders-stream", "clean-pricing-stream"],
+  }),
+  platformJob({
+    id: "enrich-inventory-records",
+    name: "Enrich inventory records",
+    schedule: { cadence: "daily", hour: 2, minute: 15 },
+    sla: sla(25),
+    dependsOn: ["clean-inventory-stream", "clean-catalog-stream"],
+  }),
+  platformJob({
+    id: "enrich-shipping-records",
+    name: "Enrich shipping records",
+    schedule: { cadence: "daily", hour: 2, minute: 30 },
+    sla: sla(25),
+    dependsOn: ["clean-shipping-stream", "clean-fulfillment-stream"],
+  }),
+  platformJob({
+    id: "enrich-support-records",
+    name: "Enrich support records",
+    schedule: { cadence: "daily", hour: 2, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["clean-support-stream"],
+  }),
+  platformJob({
+    id: "enrich-marketing-records",
+    name: "Enrich marketing records",
+    schedule: { cadence: "daily", hour: 2, minute: 45 },
+    sla: sla(25),
+    dependsOn: ["clean-marketing-stream", "clean-web-sessions-stream"],
+  }),
+  platformJob({
+    id: "enrich-payments-records",
+    name: "Enrich payments records",
+    schedule: { cadence: "daily", hour: 2, minute: 20 },
+    sla: sla(20),
+    dependsOn: ["clean-payments-stream"],
+  }),
+  platformJob({
+    id: "build-customer-360",
+    name: "Build customer 360 profile",
+    schedule: { cadence: "daily", hour: 3, minute: 0 },
+    sla: sla(40),
+    dependsOn: ["clean-orders-stream", "clean-web-sessions-stream", "clean-support-stream"],
+  }),
+  platformJob({
+    id: "build-catalog-health",
+    name: "Build catalog health signal",
+    schedule: { cadence: "daily", hour: 2, minute: 10 },
+    sla: sla(20),
+    dependsOn: ["clean-catalog-stream", "clean-inventory-stream"],
+  }),
+];
+
+// Layer 3 — aggregation/modeling, daily.
+const CORE_PLATFORM_AGGREGATE: Job[] = [
+  platformJob({
+    id: "build-revenue-aggregates",
+    name: "Build revenue aggregates",
+    schedule: { cadence: "daily", hour: 4, minute: 0 },
+    sla: sla(35),
+    dependsOn: ["enrich-order-records", "enrich-payments-records"],
+  }),
+  platformJob({
+    id: "build-inventory-forecasts",
+    name: "Build inventory forecasts",
+    schedule: { cadence: "daily", hour: 4, minute: 15 },
+    sla: sla(45),
+    dependsOn: ["enrich-inventory-records"],
+  }),
+  platformJob({
+    id: "build-logistics-kpis",
+    name: "Build logistics KPIs",
+    schedule: { cadence: "daily", hour: 4, minute: 0 },
+    sla: sla(30),
+    dependsOn: ["enrich-shipping-records"],
+  }),
+  platformJob({
+    id: "build-support-quality-score",
+    name: "Build support quality score",
+    schedule: { cadence: "daily", hour: 4, minute: 30 },
+    sla: sla(20),
+    dependsOn: ["enrich-support-records"],
+  }),
+  platformJob({
+    id: "build-attribution-model",
+    name: "Build attribution model",
+    schedule: { cadence: "daily", hour: 4, minute: 45 },
+    sla: sla(50),
+    dependsOn: ["enrich-marketing-records"],
+  }),
+  platformJob({
+    id: "build-customer-ltv-model",
+    name: "Build customer LTV model",
+    schedule: { cadence: "daily", hour: 5, minute: 0 },
+    sla: sla(50),
+    dependsOn: ["build-customer-360"],
+  }),
+  platformJob({
+    id: "build-catalog-quality-score",
+    name: "Build catalog quality score",
+    schedule: { cadence: "daily", hour: 4, minute: 10 },
+    sla: sla(20),
+    dependsOn: ["build-catalog-health"],
+  }),
+];
+
+// Layer 4 — team-facing marts, daily.
+const CORE_PLATFORM_MARTS: Job[] = [
+  platformJob({
+    id: "finance-revenue-mart",
+    name: "Finance revenue mart",
+    schedule: { cadence: "daily", hour: 6, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["build-revenue-aggregates"],
+  }),
+  platformJob({
+    id: "finance-margin-mart",
+    name: "Finance margin mart",
+    schedule: { cadence: "daily", hour: 6, minute: 15 },
+    sla: sla(20),
+    dependsOn: ["build-revenue-aggregates", "build-inventory-forecasts"],
+  }),
+  platformJob({
+    id: "ops-inventory-mart",
+    name: "Ops inventory mart",
+    schedule: { cadence: "daily", hour: 6, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["build-inventory-forecasts"],
+  }),
+  platformJob({
+    id: "ops-logistics-mart",
+    name: "Ops logistics mart",
+    schedule: { cadence: "daily", hour: 6, minute: 10 },
+    sla: sla(20),
+    dependsOn: ["build-logistics-kpis"],
+  }),
+  platformJob({
+    id: "ops-catalog-mart",
+    name: "Ops catalog mart",
+    schedule: { cadence: "daily", hour: 6, minute: 5 },
+    sla: sla(15),
+    dependsOn: ["build-catalog-quality-score"],
+  }),
+  platformJob({
+    id: "support-ops-mart",
+    name: "Support ops mart",
+    schedule: { cadence: "daily", hour: 6, minute: 20 },
+    sla: sla(15),
+    dependsOn: ["build-support-quality-score"],
+  }),
+  platformJob({
+    id: "marketing-performance-mart",
+    name: "Marketing performance mart",
+    schedule: { cadence: "daily", hour: 6, minute: 25 },
+    sla: sla(20),
+    dependsOn: ["build-attribution-model"],
+  }),
+  platformJob({
+    id: "customer-health-mart",
+    name: "Customer health mart",
+    schedule: { cadence: "daily", hour: 6, minute: 30 },
+    sla: sla(25),
+    dependsOn: ["build-customer-ltv-model"],
+  }),
+  platformJob({
+    id: "retention-mart",
+    name: "Retention mart",
+    schedule: { cadence: "daily", hour: 6, minute: 40 },
+    sla: sla(25),
+    dependsOn: ["build-customer-ltv-model", "build-support-quality-score"],
+  }),
+  platformJob({
+    id: "growth-experiments-mart",
+    name: "Growth experiments mart",
+    schedule: { cadence: "daily", hour: 6, minute: 35 },
+    sla: sla(20),
+    dependsOn: ["build-attribution-model"],
+  }),
+  platformJob({
+    id: "payments-risk-mart",
+    name: "Payments risk mart",
+    schedule: { cadence: "daily", hour: 6, minute: 12 },
+    sla: sla(20),
+    dependsOn: ["build-revenue-aggregates"],
+  }),
+  platformJob({
+    id: "fulfillment-sla-mart",
+    name: "Fulfillment SLA mart",
+    schedule: { cadence: "daily", hour: 6, minute: 18 },
+    sla: sla(20),
+    dependsOn: ["build-logistics-kpis", "build-catalog-quality-score"],
+  }),
+];
+
+// Layer 5 — dashboards/exports, the top of the pipeline. Several converge
+// on 3-4 marts at once, deliberately, so a viewer can see at a glance which
+// single upstream branch is actually the problem when only one is broken.
+const CORE_PLATFORM_DASHBOARDS: Job[] = [
+  platformJob({
+    id: "exec-dashboard-refresh",
+    name: "Exec dashboard refresh",
+    schedule: { cadence: "daily", hour: 8, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["finance-revenue-mart", "ops-logistics-mart", "customer-health-mart"],
+  }),
+  platformJob({
+    id: "finance-board-deck-export",
+    name: "Finance board deck export",
+    schedule: { cadence: "weekly", weekday: 1, hour: 8, minute: 0 },
+    sla: sla(30),
+    dependsOn: ["finance-revenue-mart", "finance-margin-mart"],
+  }),
+  platformJob({
+    id: "ops-daily-standup-export",
+    name: "Ops daily standup export",
+    schedule: { cadence: "daily", hour: 7, minute: 30 },
+    sla: sla(15),
+    dependsOn: ["ops-inventory-mart", "ops-logistics-mart"],
+  }),
+  platformJob({
+    id: "support-weekly-review-export",
+    name: "Support weekly review export",
+    schedule: { cadence: "weekly", weekday: 2, hour: 8, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["support-ops-mart", "retention-mart"],
+  }),
+  platformJob({
+    id: "marketing-weekly-report",
+    name: "Marketing weekly report",
+    schedule: { cadence: "weekly", weekday: 3, hour: 8, minute: 0 },
+    sla: sla(25),
+    dependsOn: ["marketing-performance-mart", "growth-experiments-mart"],
+  }),
+  platformJob({
+    id: "customer-success-digest",
+    name: "Customer success digest",
+    schedule: { cadence: "daily", hour: 8, minute: 10 },
+    sla: sla(15),
+    dependsOn: ["customer-health-mart", "retention-mart"],
+  }),
+  platformJob({
+    id: "investor-update-package",
+    name: "Investor update package",
+    schedule: { cadence: "weekly", weekday: 4, hour: 8, minute: 0 },
+    sla: sla(30),
+    dependsOn: ["finance-revenue-mart", "customer-health-mart"],
+  }),
+  platformJob({
+    id: "data-quality-scorecard",
+    name: "Data quality scorecard",
+    schedule: { cadence: "daily", hour: 8, minute: 20 },
+    sla: sla(20),
+    dependsOn: ["finance-revenue-mart", "ops-inventory-mart", "support-ops-mart", "marketing-performance-mart"],
+  }),
+  platformJob({
+    id: "payments-risk-digest",
+    name: "Payments risk digest",
+    schedule: { cadence: "daily", hour: 8, minute: 5 },
+    sla: sla(15),
+    dependsOn: ["payments-risk-mart"],
+  }),
+  platformJob({
+    id: "fulfillment-ops-review",
+    name: "Fulfillment ops review",
+    schedule: { cadence: "weekly", weekday: 5, hour: 8, minute: 0 },
+    sla: sla(20),
+    dependsOn: ["fulfillment-sla-mart"],
+  }),
+];
+
+// A handful of standalone maintenance jobs with no dependency edges — pads
+// the scope out the way a real platform team's backlog would, and proves
+// the graph view degrades gracefully for jobs with nothing to draw.
+const CORE_PLATFORM_MAINTENANCE: Job[] = [
+  platformJob({
+    id: "platform-warehouse-compaction",
+    name: "Platform warehouse compaction",
+    schedule: { cadence: "daily", hour: 1, minute: 0 },
+    sla: sla(30),
+    dependsOn: [],
+  }),
+  platformJob({
+    id: "platform-metadata-catalog-refresh",
+    name: "Platform metadata catalog refresh",
+    schedule: { cadence: "daily", hour: 1, minute: 30 },
+    sla: sla(15),
+    dependsOn: [],
+  }),
+  platformJob({
+    id: "platform-cost-anomaly-scan",
+    name: "Platform cost anomaly scan",
+    schedule: { cadence: "daily", hour: 1, minute: 45 },
+    sla: sla(15),
+    dependsOn: [],
+  }),
+  platformJob({
+    id: "platform-access-audit-sweep",
+    name: "Platform access audit sweep",
+    schedule: { cadence: "weekly", weekday: 6, hour: 3, minute: 0 },
+    sla: sla(20),
+    dependsOn: [],
+  }),
+  platformJob({
+    id: "platform-schema-registry-check",
+    name: "Platform schema registry check",
+    schedule: { cadence: "every_6_hours" },
+    sla: sla(10),
+    dependsOn: [],
+  }),
+  platformJob({
+    id: "platform-query-cache-warmup",
+    name: "Platform query cache warmup",
+    schedule: { cadence: "hourly" },
+    sla: sla(10),
+    dependsOn: [],
+  }),
+];
+
+const CORE_PLATFORM_JOBS: Job[] = [
+  ...CORE_PLATFORM_SOURCES,
+  ...CORE_PLATFORM_CLEAN,
+  ...CORE_PLATFORM_ENRICH,
+  ...CORE_PLATFORM_AGGREGATE,
+  ...CORE_PLATFORM_MARTS,
+  ...CORE_PLATFORM_DASHBOARDS,
+  ...CORE_PLATFORM_MAINTENANCE,
+];
+
+/** The job whose scripted failure cascades through Core Platform — see connector.ts. */
+export const CORE_PLATFORM_INCIDENT_ROOT_ID = "ingest-orders-stream";
 
 export const JOBS: Job[] = [
   // ---- Data Platform: hosts the "critical + blocks downstream" scenario ----
@@ -454,6 +844,7 @@ export const JOBS: Job[] = [
     sla: sla(60),
     dependsOn: [],
   },
+  ...CORE_PLATFORM_JOBS,
 ];
 
 export const JOBS_BY_SCOPE: Record<string, Job[]> = JOBS.reduce(

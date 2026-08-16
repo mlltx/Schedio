@@ -14,16 +14,24 @@
  */
 
 // ---------------------------------------------------------------------------
-// The two components you actually render.
+// The components you actually render.
 // ---------------------------------------------------------------------------
 export { GlanceView, type GlanceViewProps } from "./components/glance/GlanceView";
 export { JobDetail, type JobDetailProps } from "./components/glance/JobDetail";
 export type { JobNavigation } from "./components/glance/navigation";
 
+// The job detail page embeds a compact dependency neighborhood inline;
+// PipelineGraphView is its "view full pipeline" destination — a full-page
+// graph of the job's entire connected pipeline. Mount it at your own route
+// (e.g. /jobs/[id]/pipeline) and wire JobDetail's getPipelineHref/
+// onViewPipeline to it, the same doorway pattern as everywhere else.
+export { PipelineGraphView, type PipelineGraphViewProps } from "./components/graph/PipelineGraphView";
+
 // Optional, composable pieces — useful if you're building your own layout
-// around the two components above rather than using them as-is.
+// around the components above rather than using them as-is.
 export { TenantSwitcher } from "./components/glance/TenantSwitcher";
 export { DemoControls } from "./components/glance/DemoControls";
+export { DependencyGraphCanvas, type DependencyGraphCanvasProps } from "./components/graph/DependencyGraphCanvas";
 
 // ---------------------------------------------------------------------------
 // Tenant config: your branding and vocabulary.
@@ -42,6 +50,7 @@ export {
   getGlanceView,
   getAllScopeStatuses,
   getJobDetail,
+  getDependencyGraph,
   DEFAULT_TERMINOLOGY,
   mockConnector,
 } from "./model";
@@ -50,6 +59,10 @@ export type {
   ScopeStatus,
   JobStatus,
   JobDetailView,
+  DependencyGraph,
+  DependencyGraphOptions,
+  GraphNode,
+  GraphEdge,
   Severity,
   HeadlineKind,
   TimeWindow,

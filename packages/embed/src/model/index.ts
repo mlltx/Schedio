@@ -1,4 +1,7 @@
 import type {
+  DependencyGraph,
+  GraphEdge,
+  GraphNode,
   Job,
   JobDetailView,
   JobStatus,
@@ -34,6 +37,9 @@ import {
  */
 
 export type {
+  DependencyGraph,
+  GraphEdge,
+  GraphNode,
   HeadlineKind,
   JobDetailView,
   JobStatus,
@@ -277,6 +283,7 @@ export async function getJobDetail(
     cadenceLabel: CADENCE_LABEL[job.schedule.cadence],
     expectedDurationLabel: formatDurationMinutes(job.sla.expectedDurationMinutes),
     dependsOnNames: job.dependsOn.map((id) => jobsById.get(id)?.name ?? id),
+    dependencyGraph: buildDependencyGraph(jobId, 1, snapshot, statusMap),
     recentRuns: runs.slice(0, 10).map((r) => ({
       status: r.status,
       scheduledAt: r.scheduledAt,
@@ -285,4 +292,94 @@ export async function getJobDetail(
       errorSummary: r.errorSummary,
     })),
   };
+}
+
+export interface DependencyGraphOptions extends GlanceViewOptions {
+  /**
+   * How many hops to walk from `jobId` in either direction. Omit (or
+   * Infinity) for the whole connected pipeline; 1 for just the job's
+   * immediate upstream/downstream neighbors — the compact view embedded on
+   * the job detail page.
+   */
+  depth?: number;
+}
+
+/**
+ * Walks `dependsOn` in both directions from `jobId` up to `depth` hops.
+ * Shared by `getDependencyGraph` (any depth, its own fetch) and
+ * `getJobDetail` (depth 1, reusing the fetch it already did) so the job
+ * detail page's inline neighborhood never triggers a second connector
+ * round-trip just to draw a few nodes it already has the data for.
+ */
+function buildDependencyGraph(
+  jobId: string,
+  depth: number,
+  snapshot: ConnectorSnapshot,
+  statusMap: Map<string, JobStatus>,
+): DependencyGraph {
+  const jobsById = new Map(snapshot.jobs.map((j) => [j.id, j]));
+  const dependentIdsOf = new Map<string, string[]>();
+  for (const j of snapshot.jobs) {
+    for (const depId of j.dependsOn) {
+      const arr = dependentIdsOf.get(depId) ?? [];
+      arr.push(j.id);
+      dependentIdsOf.set(depId, arr);
+    }
+  }
+
+  const neighborsOf = (id: string) => [...(jobsById.get(id)?.dependsOn ?? []), ...(dependentIdsOf.get(id) ?? [])];
+
+  const visited = new Set<string>([jobId]);
+  let frontier = [jobId];
+  for (let hop = 0; hop < depth && frontier.length > 0; hop++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const neighborId of neighborsOf(id)) {
+        if (!visited.has(neighborId)) {
+          visited.add(neighborId);
+          next.push(neighborId);
+        }
+      }
+    }
+    frontier = next;
+  }
+  // The BFS hit the depth cap while the last frontier still had unvisited
+  // neighbors to expand — there's more graph beyond what's included here.
+  const truncated = frontier.some((id) => neighborsOf(id).some((n) => !visited.has(n)));
+
+  const nodes: GraphNode[] = [...visited].map((id) => {
+    const status = statusMap.get(id)!;
+    return { jobId: id, jobName: status.jobName, severity: status.severity, headline: status.headline };
+  });
+
+  const edges: GraphEdge[] = [];
+  for (const id of visited) {
+    for (const depId of jobsById.get(id)?.dependsOn ?? []) {
+      if (!visited.has(depId)) continue;
+      const upstreamStatus = statusMap.get(depId)!;
+      edges.push({
+        fromJobId: depId,
+        toJobId: id,
+        isProblem: upstreamStatus.severity === "critical" || upstreamStatus.severity === "needs_attention",
+      });
+    }
+  }
+
+  return { focalJobId: jobId, nodes, edges, truncated };
+}
+
+/**
+ * A job's dependency graph — its immediate neighborhood, or its whole
+ * connected pipeline, depending on `depth`. Every node's severity/headline
+ * comes straight from the same `statusMap` the rest of the model uses, so
+ * the graph view never re-derives status the way a component isn't allowed
+ * to.
+ */
+export async function getDependencyGraph(
+  jobId: string,
+  options: DependencyGraphOptions = {},
+): Promise<DependencyGraph | undefined> {
+  const { snapshot, statusMap } = await prepareData(options);
+  if (!statusMap.has(jobId)) return undefined;
+  return buildDependencyGraph(jobId, options.depth ?? Infinity, snapshot, statusMap);
 }
