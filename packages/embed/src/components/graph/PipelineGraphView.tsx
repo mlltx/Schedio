@@ -1,12 +1,12 @@
 "use client";
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, Search, Waypoints } from "lucide-react";
-import { getDependencyGraph, type ConnectorFn, type DependencyGraph, type Terminology } from "@/model";
+import { Search, Waypoints } from "lucide-react";
+import { getDependencyGraph, isNonHealthySeverity, type ConnectorFn, type DependencyGraph, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { usePromise } from "../glance/usePromise";
 import { cx } from "../glance/cx";
-import { NavLink } from "../glance/NavLink";
+import { BackLink } from "../glance/BackLink";
 import type { JobNavigation } from "../glance/navigation";
 import { DependencyGraphCanvas } from "./DependencyGraphCanvas";
 
@@ -19,8 +19,6 @@ import { DependencyGraphCanvas } from "./DependencyGraphCanvas";
  * for it among dozens of healthy nodes.
  */
 const AUTO_FOCUS_NODE_THRESHOLD = 15;
-
-const NON_HEALTHY = new Set(["critical", "needs_attention", "missing", "late", "recovering"]);
 
 const defaultLoading = () => (
   <div className="h-full w-full animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900" />
@@ -75,7 +73,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
 
   const problemIds = useMemo(() => {
     if (!graph) return new Set<string>();
-    return new Set(graph.nodes.filter((n) => NON_HEALTHY.has(n.severity)).map((n) => n.jobId));
+    return new Set(graph.nodes.filter((n) => isNonHealthySeverity(n.severity)).map((n) => n.jobId));
   }, [graph]);
 
   const isLarge = (graph?.nodes.length ?? 0) > AUTO_FOCUS_NODE_THRESHOLD;
@@ -89,11 +87,10 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
     return new Set(graph.nodes.map((n) => n.jobId).filter((id) => !contextIds.has(id)));
   }, [graph, hideHealthy, problemIds, contextIds]);
 
-  const focusIds = searchFocusId
-    ? new Set([searchFocusId])
-    : !showAll && isLarge && problemIds.size > 0
-      ? contextIds
-      : undefined;
+  const focusIds = useMemo(() => {
+    if (searchFocusId) return new Set([searchFocusId]);
+    return !showAll && isLarge && problemIds.size > 0 ? contextIds : undefined;
+  }, [searchFocusId, showAll, isLarge, problemIds, contextIds]);
 
   const matches = useMemo(() => {
     if (!graph || !searchTerm.trim()) return [];
@@ -114,7 +111,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
   if (graph === null) {
     return (
       <div ref={ref} style={style} className={rootClassName}>
-        <BackLink backHref={backHref} onBack={onBack} />
+        <BackLink backHref={backHref} onBack={onBack} label="Back to job" className="mb-4" />
         {(renderNotFound ?? (() => defaultNotFound(terms)))()}
       </div>
     );
@@ -124,7 +121,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
 
   return (
     <div ref={ref} style={style} className={rootClassName}>
-      <BackLink backHref={backHref} onBack={onBack} />
+      <BackLink backHref={backHref} onBack={onBack} label="Back to job" className="mb-4" />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -206,17 +203,3 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
     </div>
   );
 });
-
-function BackLink({ backHref, onBack }: Pick<PipelineGraphViewProps, "backHref" | "onBack">) {
-  if (!backHref && !onBack) return null;
-  return (
-    <NavLink
-      href={backHref}
-      onActivate={onBack}
-      className="mb-4 inline-flex w-fit items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-    >
-      <ArrowLeft className="h-4 w-4" aria-hidden />
-      Back to job
-    </NavLink>
-  );
-}

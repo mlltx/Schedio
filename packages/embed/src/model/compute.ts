@@ -18,7 +18,7 @@ import type {
 
 const MS = 60_000;
 
-const CADENCE_INTERVAL_MS: Record<Job["schedule"]["cadence"], number> = {
+export const CADENCE_INTERVAL_MS: Record<Job["schedule"]["cadence"], number> = {
   hourly: 60 * MS,
   every_6_hours: 6 * 60 * MS,
   daily: 24 * 60 * MS,
@@ -246,6 +246,23 @@ export function worstSeverity(statuses: JobStatus[]): Severity {
     if (statuses.some((j) => j.severity === s)) return s;
   }
   return "healthy";
+}
+
+/**
+ * A severity that represents an active, causally-blocking failure — the
+ * job actually did something wrong, as opposed to merely being overdue,
+ * recovering, or unclassified. One definition shared by "which upstream
+ * job's name goes in this overdue job's headline" and "which dependency
+ * graph edge is the reason something downstream is stuck", so those two
+ * can't drift apart.
+ */
+export function isBlockingSeverity(severity: Severity): boolean {
+  return severity === "critical" || severity === "needs_attention";
+}
+
+/** A severity worth a second look — anything but a clean run or no data yet. */
+export function isNonHealthySeverity(severity: Severity): boolean {
+  return severity !== "healthy" && severity !== "unknown";
 }
 
 export function headlineKindFor(

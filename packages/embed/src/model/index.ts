@@ -14,6 +14,7 @@ import type {
 import { DEFAULT_TERMINOLOGY } from "./types";
 import { SCOPES } from "./seed-data";
 import { getExpectedRunTimes, mockConnector, type ConnectorFn, type ConnectorSnapshot } from "./connector";
+import { buildDependentIdsMap } from "./graph-utils";
 import {
   CADENCE_LABEL,
   SEVERITY_RANK,
@@ -23,6 +24,7 @@ import {
   formatRelative,
   headlineCopyFor,
   headlineKindFor,
+  isBlockingSeverity,
   isExceptionInWindow,
   windowStart,
 } from "./compute";
@@ -51,6 +53,10 @@ export type {
   TrendPoint,
 } from "./types";
 export { DEFAULT_TERMINOLOGY } from "./types";
+// The one place that decides "does this severity need a second look" — see
+// PipelineGraphView's issue-focus filter, which reads this instead of
+// hand-copying its own severity allow-list.
+export { isNonHealthySeverity } from "./compute";
 
 // Raw model shapes + the connector seam itself. Components never see these —
 // only someone implementing a real connector needs them.
@@ -99,7 +105,7 @@ function classifyAllJobs(snapshot: ConnectorSnapshot, now: Date, terms: Terminol
     const runs = snapshot.runsByJobId.get(job.id) ?? [];
     const failedUpstreamNames = job.dependsOn
       .map((depId) => withoutUpstream.get(depId))
-      .filter((s): s is JobStatus => !!s && (s.severity === "critical" || s.severity === "needs_attention"))
+      .filter((s): s is JobStatus => !!s && isBlockingSeverity(s.severity))
       .map((s) => jobsById.get(s.jobId)!.name);
 
     final.set(
@@ -318,14 +324,7 @@ function buildDependencyGraph(
   statusMap: Map<string, JobStatus>,
 ): DependencyGraph {
   const jobsById = new Map(snapshot.jobs.map((j) => [j.id, j]));
-  const dependentIdsOf = new Map<string, string[]>();
-  for (const j of snapshot.jobs) {
-    for (const depId of j.dependsOn) {
-      const arr = dependentIdsOf.get(depId) ?? [];
-      arr.push(j.id);
-      dependentIdsOf.set(depId, arr);
-    }
-  }
+  const dependentIdsOf = buildDependentIdsMap(snapshot.jobs);
 
   const neighborsOf = (id: string) => [...(jobsById.get(id)?.dependsOn ?? []), ...(dependentIdsOf.get(id) ?? [])];
 
@@ -360,7 +359,7 @@ function buildDependencyGraph(
       edges.push({
         fromJobId: depId,
         toJobId: id,
-        isProblem: upstreamStatus.severity === "critical" || upstreamStatus.severity === "needs_attention",
+        isProblem: isBlockingSeverity(upstreamStatus.severity),
       });
     }
   }

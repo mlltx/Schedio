@@ -1,13 +1,14 @@
 "use client";
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, Waypoints } from "lucide-react";
+import { Waypoints } from "lucide-react";
 import { getJobDetail, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";
 import { NavLink } from "./NavLink";
+import { BackLink } from "./BackLink";
 import { formatShortDateTime } from "./format";
 import { DependencyGraphCanvas } from "../graph/DependencyGraphCanvas";
 import type { JobNavigation } from "./navigation";
@@ -59,20 +60,6 @@ export interface JobDetailProps extends JobNavigation {
   style?: CSSProperties;
 }
 
-function BackLink({ backHref, onBack }: Pick<JobDetailProps, "backHref" | "onBack">) {
-  if (!backHref && !onBack) return null;
-  return (
-    <NavLink
-      href={backHref}
-      onActivate={onBack}
-      className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-    >
-      <ArrowLeft className="h-4 w-4" aria-hidden />
-      Back to glance
-    </NavLink>
-  );
-}
-
 export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function JobDetail(
   {
     jobId,
@@ -109,7 +96,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
   if (job === null) {
     return (
       <div ref={ref} style={style} className={rootClassName}>
-        <BackLink backHref={backHref} onBack={onBack} />
+        <BackLink backHref={backHref} onBack={onBack} label="Back to glance" className="mb-6" />
         {(renderNotFound ?? (() => defaultNotFound(tenant.terminology)))()}
       </div>
     );
@@ -120,7 +107,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
 
   return (
     <div ref={ref} style={style} className={rootClassName}>
-      <BackLink backHref={backHref} onBack={onBack} />
+      <BackLink backHref={backHref} onBack={onBack} label="Back to glance" className="mb-6" />
 
       <div className="flex items-start justify-between gap-4">
         <div>

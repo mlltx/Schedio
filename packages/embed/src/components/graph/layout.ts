@@ -25,19 +25,19 @@ export interface FlowNodeData extends Record<string, unknown> {
   onActivate?: () => void;
 }
 
+type FlowLayout = { nodes: Node<FlowNodeData>[]; edges: Edge[] };
+
 const PROBLEM_EDGE_COLOR = "#dc2626";
 const NORMAL_EDGE_COLOR = "#a1a1aa";
 
-export interface LayoutOptions {
-  dimmedIds?: Set<string>;
-  getJobHref?: (jobId: string) => string;
-  onJobSelect?: (jobId: string) => void;
-}
-
-export function layoutDependencyGraph(
-  graph: DependencyGraph,
-  { dimmedIds = new Set<string>(), getJobHref, onJobSelect }: LayoutOptions = {},
-): { nodes: Node<FlowNodeData>[]; edges: Edge[] } {
+/**
+ * The expensive half: dagre positioning. Depends only on `graph`'s shape
+ * (nodes/edges), never on dimming or click handlers, so callers should
+ * memoize this on `graph` alone — see `applyGraphOverlay` for the cheap
+ * per-render decoration that changes on every "focus on issues" toggle or
+ * inline-callback re-render without re-running dagre.
+ */
+export function computeGraphLayout(graph: DependencyGraph): FlowLayout {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "LR", nodesep: 28, ranksep: 88 });
@@ -62,16 +62,15 @@ export function layoutDependencyGraph(
         severity: node.severity,
         headline: node.headline,
         isFocal: node.jobId === graph.focalJobId,
-        dimmed: dimmedIds.has(node.jobId),
-        href: node.jobId === graph.focalJobId ? undefined : getJobHref?.(node.jobId),
-        onActivate: node.jobId === graph.focalJobId ? undefined : onJobSelect ? () => onJobSelect(node.jobId) : undefined,
+        dimmed: false,
+        href: undefined,
+        onActivate: undefined,
       },
     };
   });
 
   const edges: Edge[] = graph.edges.map((edge) => {
     const color = edge.isProblem ? PROBLEM_EDGE_COLOR : NORMAL_EDGE_COLOR;
-    const dimmed = dimmedIds.has(edge.fromJobId) || dimmedIds.has(edge.toJobId);
     return {
       id: `${edge.fromJobId}->${edge.toJobId}`,
       source: edge.fromJobId,
@@ -81,11 +80,43 @@ export function layoutDependencyGraph(
         stroke: color,
         strokeWidth: edge.isProblem ? 2.25 : 1.5,
         strokeDasharray: edge.isProblem ? "1,5" : undefined,
-        opacity: dimmed ? 0.25 : 1,
+        opacity: 1,
       },
       markerEnd: { type: MarkerType.ArrowClosed, color, width: 16, height: 16 },
     };
   });
+
+  return { nodes, edges };
+}
+
+export interface GraphOverlayOptions {
+  dimmedIds?: Set<string>;
+  getJobHref?: (jobId: string) => string;
+  onJobSelect?: (jobId: string) => void;
+}
+
+/**
+ * The cheap half: dimming and click-doorway wiring on top of an
+ * already-positioned layout. A plain `.map()` over however many nodes are
+ * in the graph — no dagre — so re-deriving this on every "focus on issues"
+ * toggle or on a host passing fresh inline `onJobSelect`/`getJobHref`
+ * closures each render costs nothing worth memoizing away.
+ */
+export function applyGraphOverlay(base: FlowLayout, { dimmedIds = new Set<string>(), getJobHref, onJobSelect }: GraphOverlayOptions = {}): FlowLayout {
+  const nodes = base.nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      dimmed: dimmedIds.has(node.data.jobId),
+      href: node.data.isFocal ? undefined : getJobHref?.(node.data.jobId),
+      onActivate: node.data.isFocal ? undefined : onJobSelect ? () => onJobSelect(node.data.jobId) : undefined,
+    },
+  }));
+
+  const edges = base.edges.map((edge) => ({
+    ...edge,
+    style: { ...edge.style, opacity: dimmedIds.has(edge.source) || dimmedIds.has(edge.target) ? 0.25 : 1 },
+  }));
 
   return { nodes, edges };
 }

@@ -1,5 +1,7 @@
 import type { Job, Run, RunStatus, Schedule } from "./types";
 import { CORE_PLATFORM_INCIDENT_ROOT_ID, JOBS, JOBS_BY_SCOPE } from "./seed-data";
+import { buildDependentIdsMap } from "./graph-utils";
+import { CADENCE_INTERVAL_MS } from "./compute";
 
 /**
  * Stands in for a real scheduler connector (Airflow, Dagster, Temporal...).
@@ -282,28 +284,14 @@ const SCENARIOS: Record<string, ScenarioOverride> = {
  * scale at which a hand-maintained list of "everything downstream of X"
  * silently drifts out of date.
  */
-const CADENCE_HOURS: Record<Job["schedule"]["cadence"], number> = {
-  hourly: 1,
-  every_6_hours: 6,
-  daily: 24,
-  weekly: 24 * 7,
-  monthly: 24 * 30,
-};
-
 /** How far back to strip a job's history to guarantee it reads as overdue, regardless of its own cadence. */
 function overdueStripHours(job: Job): number {
-  return CADENCE_HOURS[job.schedule.cadence] + job.sla.graceMinutes / 60 + 24;
+  const cadenceHours = CADENCE_INTERVAL_MS[job.schedule.cadence] / (60 * 60 * 1000);
+  return cadenceHours + job.sla.graceMinutes / 60 + 24;
 }
 
 function transitiveDependentIds(rootId: string, jobs: Job[]): string[] {
-  const dependents = new Map<string, string[]>();
-  for (const job of jobs) {
-    for (const depId of job.dependsOn) {
-      const arr = dependents.get(depId) ?? [];
-      arr.push(job.id);
-      dependents.set(depId, arr);
-    }
-  }
+  const dependents = buildDependentIdsMap(jobs);
 
   const affected: string[] = [];
   const seen = new Set<string>([rootId]);

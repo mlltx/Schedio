@@ -7,7 +7,7 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, type 
 // them again here would leak an unscoped copy straight onto the host page.
 import type { DependencyGraph } from "@/model";
 import { GraphJobNode } from "./GraphJobNode";
-import { layoutDependencyGraph } from "./layout";
+import { applyGraphOverlay, computeGraphLayout } from "./layout";
 import type { JobNavigation } from "../glance/navigation";
 
 const nodeTypes: NodeTypes = { job: GraphJobNode };
@@ -31,9 +31,14 @@ function CanvasInner({
   getJobHref,
   onJobSelect,
 }: DependencyGraphCanvasProps) {
+  // Dagre positioning only depends on the graph's shape — memoized on
+  // `graph` alone so a "focus on issues" toggle or a host re-render with a
+  // fresh inline onJobSelect closure doesn't re-run layout on ~60 nodes for
+  // what's really just a dimming/click-handler change (see layout.ts).
+  const baseLayout = useMemo(() => computeGraphLayout(graph), [graph]);
   const { nodes, edges } = useMemo(
-    () => layoutDependencyGraph(graph, { dimmedIds, getJobHref, onJobSelect }),
-    [graph, dimmedIds, getJobHref, onJobSelect],
+    () => applyGraphOverlay(baseLayout, { dimmedIds, getJobHref, onJobSelect }),
+    [baseLayout, dimmedIds, getJobHref, onJobSelect],
   );
 
   const reactFlow = useReactFlow();
