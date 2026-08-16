@@ -510,7 +510,24 @@ export function combineConnectors(connectors: Record<string, ConnectorFn>): Conn
   const keys = Object.keys(connectors);
 
   return async (now, reachabilityOverrides) => {
-    const settled = await Promise.allSettled(keys.map((key) => connectors[key](now, reachabilityOverrides)));
+    // Override keys arrive in the *merged* namespace (e.g.
+    // "airflow-prod:data-platform" — whatever a caller like the built-in
+    // outage-simulation UI read back from this combined snapshot's own
+    // scopes), but each source's own connector only knows its own
+    // unprefixed scope ids. Unprefix per source before forwarding, so an
+    // override actually reaches the source it's meant for instead of
+    // silently matching nothing.
+    const settled = await Promise.allSettled(
+      keys.map((key) => {
+        const prefix = `${key}:`;
+        const ownOverrides = Object.fromEntries(
+          Object.entries(reachabilityOverrides)
+            .filter(([scopeId]) => scopeId.startsWith(prefix))
+            .map(([scopeId, reachable]) => [scopeId.slice(prefix.length), reachable]),
+        );
+        return connectors[key](now, ownOverrides);
+      }),
+    );
 
     const jobs: Job[] = [];
     // Each source's own "all" scope is dropped below (only "team" scopes

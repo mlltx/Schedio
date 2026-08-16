@@ -2,17 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { PipelineGraphView } from "@schedio/embed";
+import { useAppConnector } from "./AppConnectorProvider";
+import { jobHref } from "@/lib/jobRoutes";
 
 /** Same doorway pattern as GlanceViewConnected/JobDetailConnected — a real href plus a router callback. */
 export function PipelineGraphViewConnected({ jobId }: { jobId: string }) {
   const router = useRouter();
+  const { connector } = useAppConnector();
   return (
     <PipelineGraphView
       jobId={jobId}
-      backHref={`/jobs/${jobId}`}
-      onBack={() => router.push(`/jobs/${jobId}`)}
-      getJobHref={(id) => `/jobs/${id}`}
-      onJobSelect={(id) => router.push(`/jobs/${id}`)}
+      connector={connector}
+      backHref={jobHref(jobId)}
+      onBack={() => router.push(jobHref(jobId))}
+      getJobHref={jobHref}
+      onJobSelect={(id) => router.push(jobHref(id))}
     />
   );
 }

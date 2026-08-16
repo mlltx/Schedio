@@ -261,12 +261,33 @@ own defaults, purely to prove the boundary holds live via `web/`'s
 
 ### Demo controls
 
-Two things exist purely to exercise edge cases that would otherwise
-require hand-editing mock data, and neither should be mistaken for a real
+Three things exist purely to exercise edge cases that would otherwise
+require hand-editing mock data, and none should be mistaken for a real
 product feature: the connector-outage simulator (`DemoControls`, exported
 from the package but only rendered by `GlanceView` when no custom
-`connector` prop is passed — see `showDemoControls` on `GlanceViewProps`)
-and the tenant preview switcher above, which is `web/`-only.
+`connector` prop is passed — see `showDemoControls` on `GlanceViewProps`),
+the tenant preview switcher, and the "Data source: Single / Combined"
+switcher (`web/src/components/ConnectorModeSwitcher.tsx` +
+`AppConnectorProvider.tsx`) — all `web/`-only, all rendered together from
+`PreviewControlsBar.tsx`. The combined mode wires two copies of the mock
+connector through `combineConnectors` under different keys ("us-east"/
+"eu-west", each relabeled via a small `withRegionLabel` wrapper in
+`web/src/lib/demoConnectors.ts`) — it's the same pattern a real deployment
+would use with `@schedio/connector-airflow` for two real Airflow
+instances, just without needing one to actually exist in this environment.
+
+**Job ids can contain `:` once `combineConnectors` is in play**
+(`"us-east:build-revenue-facts"`), and this Next.js version does **not**
+auto-decode dynamic route segment params the way you'd expect from
+training-data knowledge of Next.js (confirmed empirically, not assumed —
+see `web/AGENTS.md`'s warning about this). `web/src/lib/jobRoutes.ts`'s
+`jobHref`/`jobPipelineHref` encode job ids going out; both
+`jobs/[id]/page.tsx` and `jobs/[id]/pipeline/page.tsx` call
+`decodeURIComponent` on `params.id` coming back in. If you add another
+route that takes a job id, follow the same pair — skipping either half
+breaks silently (a raw colon looks like a valid path segment right up
+until `getJobDetail` fails to find a job with the literal `%3A`-encoded
+id).
 
 ### Styling (web/'s own chrome)
 

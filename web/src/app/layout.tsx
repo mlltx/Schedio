@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppTenantProvider } from "@/components/AppTenantProvider";
+import { AppConnectorProvider } from "@/components/AppConnectorProvider";
 import "@schedio/embed/style.css";
 import "./globals.css";
 
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AppTenantProvider>{children}</AppTenantProvider>
+        <AppTenantProvider>
+          <AppConnectorProvider>{children}</AppConnectorProvider>
+        </AppTenantProvider>
       </body>
     </html>
   );
