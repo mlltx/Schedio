@@ -1,0 +1,17 @@
+# npm workspaces — one lockfile at the root, node_modules can appear at
+# the root and/or inside any workspace depending on hoisting.
+node_modules/
+
+# build outputs
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.env*
+.vercel

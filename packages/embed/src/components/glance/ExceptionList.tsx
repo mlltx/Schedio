@@ -1,15 +1,18 @@
 import type { JobStatus } from "@/model";
 import { ExceptionRow } from "./ExceptionRow";
+import type { JobNavigation } from "./navigation";
 
 export function ExceptionList({
   exceptions,
   heading,
   onOutageClick,
+  getJobHref,
+  onJobSelect,
 }: {
   exceptions: JobStatus[];
   heading: string;
   onOutageClick?: (scopeId: string) => void;
-}) {
+} & JobNavigation) {
   if (exceptions.length === 0) return null;
 
   return (
@@ -19,7 +22,13 @@ export function ExceptionList({
       </h2>
       <div className="flex flex-col gap-2">
         {exceptions.map((status) => (
-          <ExceptionRow key={status.jobId} status={status} onOutageClick={onOutageClick} />
+          <ExceptionRow
+            key={status.jobId}
+            status={status}
+            onOutageClick={onOutageClick}
+            getJobHref={getJobHref}
+            onJobSelect={onJobSelect}
+          />
         ))}
       </div>
     </div>

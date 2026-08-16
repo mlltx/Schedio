@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run build --prefix ../packages/embed",
     "dev": "next dev",
+    "prebuild": "npm run build --prefix ../packages/embed",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "lucide-react": "^1.31.0",
+    "@schedio/embed": "*",
     "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"

@@ -1,6 +1,6 @@
-import { JobDetail } from "@/components/glance/JobDetail";
+import { JobDetailConnected } from "@/components/JobDetailConnected";
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <JobDetail jobId={id} />;
+  return <JobDetailConnected jobId={id} />;
 }

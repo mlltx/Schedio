@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { TenantConfigProvider } from "@/config/TenantConfigProvider";
+import { AppTenantProvider } from "@/components/AppTenantProvider";
+import "@schedio/embed/style.css";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TenantConfigProvider>{children}</TenantConfigProvider>
+        <AppTenantProvider>{children}</AppTenantProvider>
       </body>
     </html>
   );

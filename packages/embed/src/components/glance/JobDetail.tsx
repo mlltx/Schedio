@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
-import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getJobDetail } from "@/model";
+import { getJobDetail, type ConnectorFn } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
+import { usePromise } from "./usePromise";
 
 function formatClock(iso?: string) {
   if (!iso) return "—";
@@ -29,24 +27,78 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function JobDetail({ jobId }: { jobId: string }) {
-  const tenant = useTenantConfig();
-  const job = useMemo(() => getJobDetail(jobId, { terms: tenant.terminology }), [jobId, tenant.terminology]);
+export interface JobDetailProps {
+  jobId: string;
+  /** Where the data comes from. Defaults to Schedio's built-in mock connector. */
+  connector?: ConnectorFn;
+  /** If provided, "Back to glance" renders as a real link to this href. */
+  backHref?: string;
+  /** Called when "Back to glance" is activated — use for client-side routing. */
+  onBack?: () => void;
+}
 
-  if (!job) notFound();
+function BackLink({ backHref, onBack }: Pick<JobDetailProps, "backHref" | "onBack">) {
+  const className =
+    "mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200";
+  const content = (
+    <>
+      <ArrowLeft className="h-4 w-4" aria-hidden />
+      Back to glance
+    </>
+  );
+  if (backHref) {
+    return (
+      <a
+        href={backHref}
+        onClick={onBack ? (e) => (e.preventDefault(), onBack()) : undefined}
+        className={className}
+      >
+        {content}
+      </a>
+    );
+  }
+  if (onBack) {
+    return (
+      <button type="button" onClick={onBack} className={className}>
+        {content}
+      </button>
+    );
+  }
+  return null;
+}
+
+export function JobDetail({ jobId, connector, backHref, onBack }: JobDetailProps) {
+  const tenant = useTenantConfig();
+  const job = usePromise(async () => {
+    const result = await getJobDetail(jobId, { terms: tenant.terminology, connector });
+    return result ?? null;
+  }, [jobId, tenant.terminology, connector]);
+
+  if (job === undefined) {
+    return (
+      <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
+      </div>
+    );
+  }
+
+  if (job === null) {
+    return (
+      <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+        <BackLink backHref={backHref} onBack={onBack} />
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          This {tenant.terminology.job} could not be found.
+        </p>
+      </div>
+    );
+  }
 
   const terms = tenant.terminology;
   const visual = SEVERITY_VISUAL[job.severity];
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link
-        href="/"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to glance
-      </Link>
+    <div className="schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+      <BackLink backHref={backHref} onBack={onBack} />
 
       <div className="flex items-start justify-between gap-4">
         <div>

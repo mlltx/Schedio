@@ -319,6 +319,22 @@ export interface ConnectorSnapshot {
   lastSyncedAt: string;
 }
 
+/**
+ * The seam a real integration plugs into. A connector's only job is
+ * producing a snapshot in the model's raw shape — everything downstream
+ * (severity, rollup, copy) is computed identically regardless of where the
+ * snapshot came from. Async because real connectors fetch over the network;
+ * `getGlanceView`/`getJobDetail` await this even when a connector (like the
+ * built-in mock) happens to resolve synchronously.
+ */
+export type ConnectorFn = (
+  now: Date,
+  reachabilityOverrides: Record<string, boolean>,
+) => ConnectorSnapshot | Promise<ConnectorSnapshot>;
+
+export const mockConnector: ConnectorFn = (now, reachabilityOverrides) =>
+  fetchConnectorSnapshot(now, reachabilityOverrides);
+
 export function fetchConnectorSnapshot(
   now: Date,
   reachabilityOverrides: Record<string, boolean> = {},

@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { DEFAULT_TERMINOLOGY } from "./types";
 import { SCOPES } from "./seed-data";
-import { fetchConnectorSnapshot, getExpectedRunTimes, type ConnectorSnapshot } from "./connector";
+import { getExpectedRunTimes, mockConnector, type ConnectorFn, type ConnectorSnapshot } from "./connector";
 import {
   CADENCE_LABEL,
   SEVERITY_RANK,
@@ -29,7 +29,8 @@ import {
  * may import from ./types, ./connector, or ./compute directly — only from
  * here. That boundary is what makes "the UI never talks to a scheduler
  * directly" true rather than aspirational: swapping the mock connector for
- * a real one only ever means changing connector.ts.
+ * a real one only ever means passing a different `connector` option — no
+ * component or compute.ts code needs to change.
  */
 
 export type {
@@ -44,6 +45,12 @@ export type {
   TrendPoint,
 } from "./types";
 export { DEFAULT_TERMINOLOGY } from "./types";
+
+// Raw model shapes + the connector seam itself. Components never see these —
+// only someone implementing a real connector needs them.
+export type { Job, Run, RunStatus, Schedule, Sla, Cadence } from "./types";
+export type { ConnectorFn, ConnectorSnapshot } from "./connector";
+export { mockConnector } from "./connector";
 
 export function getScopes(): Scope[] {
   return SCOPES;
@@ -111,12 +118,19 @@ export interface GlanceViewOptions {
   now?: Date;
   /** The tenant's vocabulary for "job"/"run"/etc. Defaults to Schedio's own. */
   terms?: Terminology;
+  /** Where the raw data comes from. Defaults to the built-in mock connector. */
+  connector?: ConnectorFn;
 }
 
-export function getGlanceView(scopeId: string, window: TimeWindow, options: GlanceViewOptions = {}): ScopeStatus {
+export async function getGlanceView(
+  scopeId: string,
+  window: TimeWindow,
+  options: GlanceViewOptions = {},
+): Promise<ScopeStatus> {
   const now = options.now ?? new Date();
   const terms = options.terms ?? DEFAULT_TERMINOLOGY;
-  const snapshot = fetchConnectorSnapshot(now, options.reachabilityOverrides ?? {});
+  const connector = options.connector ?? mockConnector;
+  const snapshot = await connector(now, options.reachabilityOverrides ?? {});
   const statusMap = classifyAllJobs(snapshot, now, terms);
 
   const scope = SCOPES.find((s) => s.id === scopeId) ?? SCOPES[0];
@@ -209,10 +223,14 @@ export function getGlanceView(scopeId: string, window: TimeWindow, options: Glan
   };
 }
 
-export function getJobDetail(jobId: string, options: GlanceViewOptions = {}): JobDetailView | undefined {
+export async function getJobDetail(
+  jobId: string,
+  options: GlanceViewOptions = {},
+): Promise<JobDetailView | undefined> {
   const now = options.now ?? new Date();
   const terms = options.terms ?? DEFAULT_TERMINOLOGY;
-  const snapshot = fetchConnectorSnapshot(now, options.reachabilityOverrides ?? {});
+  const connector = options.connector ?? mockConnector;
+  const snapshot = await connector(now, options.reachabilityOverrides ?? {});
   const job = snapshot.jobs.find((j) => j.id === jobId);
   if (!job) return undefined;
 

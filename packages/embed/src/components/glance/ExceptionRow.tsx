@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { JobStatus } from "@/model";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
+import type { JobNavigation } from "./navigation";
 
 const rowClasses =
   "group flex w-full items-center gap-3.5 rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700 dark:hover:bg-zinc-900";
@@ -9,10 +9,12 @@ const rowClasses =
 export function ExceptionRow({
   status,
   onOutageClick,
+  getJobHref,
+  onJobSelect,
 }: {
   status: JobStatus;
   onOutageClick?: (scopeId: string) => void;
-}) {
+} & JobNavigation) {
   const visual = SEVERITY_VISUAL[status.severity];
   const isOutage = status.jobId.startsWith("__outage__");
 
@@ -49,9 +51,22 @@ export function ExceptionRow({
     );
   }
 
+  const href = getJobHref?.(status.jobId);
+  if (href) {
+    return (
+      <a
+        href={href}
+        onClick={onJobSelect ? (e) => (e.preventDefault(), onJobSelect(status.jobId)) : undefined}
+        className={rowClasses}
+      >
+        {content}
+      </a>
+    );
+  }
+
   return (
-    <Link href={`/jobs/${status.jobId}`} className={rowClasses}>
+    <button type="button" onClick={() => onJobSelect?.(status.jobId)} className={rowClasses}>
       {content}
-    </Link>
+    </button>
   );
 }
