@@ -236,10 +236,37 @@ Schedio's rendered UI or React state — but the connector's raw network
 response is still visible to anyone with dev tools open before this
 function discards the disallowed parts, the same as any client-side check.
 A real boundary against that means running the connector (with this
-wrapper) somewhere the viewer can't inspect the traffic — a server
-component or API route the client-side `ConnectorFn` calls instead of
-hitting the backend directly. Don't oversell "hard boundary" language here
-without that qualifier.
+wrapper) somewhere the viewer can't inspect the traffic instead — which is
+exactly what the pieces below are for, and what `web/` actually does.
+
+**Running a connector server-side needs its own package entry point.**
+`src/index.ts` (the package root) bundles the components together with the
+model layer under one `"use client"` banner, since that's what the
+components need in the browser — but a bundler enforcing React Server
+Component boundaries (Next.js included) then treats *everything* in that
+bundle as client-only, plain model functions like `mockConnector` included,
+and refuses to let server-only code call them. `src/server.ts` re-exports
+the model layer only (`export * from "./model"`, plus `Capability`/
+`Permissions`/`hasCapability` — no components, no React context providers)
+and is built as a genuinely separate bundle with no `"use client"` banner,
+published as the `@schedio/embed/server` subpath export. `tsup.config.ts`
+takes an array of two configs rather than one (`defineConfig([...])`) to
+get independent bundles with independent banners — a single `banner`
+option can't be conditioned per entry point in tsup, since its callback
+only receives the output format, not which entry produced it. Import
+`GlanceView`/`JobDetail`/`PermissionsProvider`/etc. from the package root
+as always; import `mockConnector`/`withScopeAccess`/`getGlanceView`/etc.
+from `@schedio/embed/server` in anything that has to run server-side.
+
+`serializeSnapshot`/`deserializeSnapshot` (`model/connector.ts`) flatten a
+`ConnectorSnapshot`'s `Map`/`Set` fields to arrays and back — the only
+parts of the shape that aren't `JSON.stringify`-safe — and
+`createProxyConnector` builds the client-side half: a `ConnectorFn` that
+fetches your own same-origin endpoint (whatever shape you like — query
+params, headers, method) instead of a backend directly. Framework-agnostic
+by design, same as everything else in `model/connector.ts` — no
+`next/server` import anywhere in this file, so the identical pattern works
+behind an Express route or anything else that returns JSON.
 
 **Capabilities** (which actions a viewer may take) is `Capability`/
 `Permissions`/`hasCapability` (`permissions/types.ts`) plus
@@ -261,21 +288,38 @@ exposed — a host maps its own IdP roles/groups into that shape however it
 wants, rather than Schedio inventing a role taxonomy that competes with
 whatever the host's real auth system already has.
 
-`web/`'s own demo has no real login either, so it fakes one the same way
-it fakes multiple tenants/connectors: `AppPermissionsProvider` holds an
-in-memory "which mock user" selection (`admin` / `data-platform-viewer` /
-`payments-viewer`), and `useScopedConnector` (`web/src/components/`) is
-where every `*Connected` component gets its connector from — it composes
-`AppConnectorProvider`'s mode-selected connector with the current mock
-user's `withScopeAccess` filter in one place, so the RBAC wrapper can't be
-forgotten on any individual view. It also expands a restricted user's base
-scope ids per-region when the combined connector is active
-(`"data-platform"` → `"us-east:data-platform"` + `"eu-west:data-platform"`)
-— a restricted viewer should see their team on every instance they have
-access to, not just whichever region happened to come first in the merge.
-Like every other preview switcher here, the selection is in-memory only
-and resets on a hard reload — a real deployment resolves `Permissions` from
-a verified session on every request, not client `useState`.
+`web/`'s own demo has no real login, so it fakes one the same way it fakes
+multiple tenants/connectors — but the actual data-fetching seam is real,
+not mocked: `web/src/app/api/snapshot/route.ts` is a Route Handler that
+imports from `@schedio/embed/server` and is the *only* place that decides
+a request's `Permissions`, reading `admin` / `data-platform-viewer` /
+`payments-viewer` from an httpOnly cookie (`PREVIEW_USER_COOKIE`,
+`web/src/lib/mockUsers.ts`) rather than trusting anything client-supplied
+— `setPreviewUser` (`web/src/lib/previewUserActions.ts`, a `"use server"`
+Server Function) is the only thing that can set it. The route applies
+`withScopeAccess` server-side and returns an already-filtered,
+`serializeSnapshot`'d response; client-side, `useScopedConnector`
+(`web/src/components/`) builds a `createProxyConnector` that fetches it,
+and every `*Connected` component gets its connector from that one hook so
+the server-side filter can't be bypassed by any individual view fetching a
+connector directly. `mode` (single vs. combined) still travels as a query
+param — it only selects which mock dataset to use, no access implications
+— and the route expands a restricted user's base scope ids per-region
+itself when combined mode is active, so a restricted viewer sees their
+team on every instance, not just whichever region happened to come first.
+
+A `"use server"` file may only export async functions — a real constraint
+this hit directly, since `PREVIEW_USER_COOKIE` (a plain string) couldn't
+live in the same file as `setPreviewUser` and had to move to
+`mockUsers.ts` instead. `setUserId` (`AppPermissionsProvider`) awaits the
+cookie-setting action before flipping local state, so the connector
+identity change that triggers `usePromise`'s immediate refetch never races
+the request that's supposed to have already updated the cookie by then.
+Like every other preview switcher here, the client-visible selection is
+in-memory and resets on a hard reload; a real deployment resolves
+`Permissions` from a verified session on every request instead of a mock
+user cookie, but the shape — server decides identity, client never does —
+is the same either way.
 
 ### Embeddability: no assumed host
 

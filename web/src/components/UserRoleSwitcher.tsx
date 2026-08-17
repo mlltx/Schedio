@@ -1,6 +1,7 @@
 "use client";
 
-import { useAppPermissions, MOCK_USERS, type MockUserId } from "./AppPermissionsProvider";
+import { useAppPermissions } from "./AppPermissionsProvider";
+import { MOCK_USERS, type MockUserId } from "@/lib/mockUsers";
 
 /**
  * Demo-only, same reasoning as ConnectorModeSwitcher: a real host resolves

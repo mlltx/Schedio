@@ -1,4 +1,4 @@
-import { combineConnectors, mockConnector, type ConnectorFn } from "@schedio/embed";
+import { combineConnectors, mockConnector, type ConnectorFn } from "@schedio/embed/server";
 
 /**
  * `ConnectorFn` is just a function, so it composes the same way an Express
@@ -17,8 +17,21 @@ function withRegionLabel(connector: ConnectorFn, label: string): ConnectorFn {
   };
 }
 
-/** The two source keys `combinedDemoConnector` namespaces scope/job ids under — see useScopedConnector, which needs these to expand a restricted user's base scope ids per-region. */
+/** The two source keys `combinedDemoConnector` namespaces scope/job ids under — see `expandScopeIdsForRegions`, which needs these to expand a restricted user's base scope ids per-region. */
 export const DEMO_REGIONS = ["us-east", "eu-west"] as const;
+
+/**
+ * A restricted user's `Permissions.scopeIds` are base, unprefixed team ids
+ * (they don't know or care whether the combined connector is even in play).
+ * When it is, `combineConnectors` has namespaced every scope id per source,
+ * so those base ids need the same treatment before `withScopeAccess` can
+ * match anything — and a restricted viewer should see their team on every
+ * region it exists in, not just whichever one happened to combine first.
+ */
+export function expandScopeIdsForRegions(scopeIds: "all" | string[]): "all" | string[] {
+  if (scopeIds === "all") return "all";
+  return DEMO_REGIONS.flatMap((region) => scopeIds.map((id) => `${region}:${id}`));
+}
 
 /**
  * Two "Airflow instances" combined into one view — both backed by the same

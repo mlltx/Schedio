@@ -1,56 +1,46 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { PermissionsProvider, type Capability, type Permissions } from "@schedio/embed";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { PermissionsProvider, type Permissions } from "@schedio/embed";
+import { DEFAULT_MOCK_USER_ID, permissionsFor, type MockUserId } from "@/lib/mockUsers";
+import { setPreviewUser } from "@/lib/previewUserActions";
 
 /**
  * Same shape as AppConnectorProvider/AppTenantProvider: which mock user is
  * selected is our own demo-preview state, not something @schedio/embed
- * knows about — it only ever sees a resolved `Permissions` value (or its
- * absence, meaning full access). A real host derives this from its own
- * signed-in user, not a runtime switcher.
+ * knows about. Unlike those two, the *data* fetch itself doesn't read this
+ * context at all — app/api/snapshot/route.ts resolves Permissions from an
+ * httpOnly cookie server-side (see setPreviewUser), so a viewer's own
+ * client state can't be the thing granting them access. `permissions` here
+ * only feeds @schedio/embed's PermissionsProvider (client-side capability
+ * checks, which are UI-only by design) and gives useScopedConnector a
+ * value that changes identity when the user switches, to trigger an
+ * immediate refetch instead of waiting out the poll interval.
  */
-export type MockUserId = "admin" | "data-platform-viewer" | "payments-viewer";
-
-interface MockUser {
-  label: string;
-  /**
-   * Base (unprefixed) team scope ids, or "all". `useScopedConnector`
-   * expands these per-region when the combined connector is selected
-   * ("data-platform" -> "us-east:data-platform" + "eu-west:data-platform")
-   * — a restricted user should see their team everywhere it exists, not
-   * just in whichever "instance" happens to come first.
-   */
-  scopeIds: "all" | string[];
-  capabilities: "all" | Set<Capability>;
-}
-
-export const MOCK_USERS: Record<MockUserId, MockUser> = {
-  admin: { label: "Admin — sees everything", scopeIds: "all", capabilities: "all" },
-  "data-platform-viewer": { label: "Data Platform viewer", scopeIds: ["data-platform"], capabilities: new Set() },
-  "payments-viewer": { label: "Payments viewer", scopeIds: ["payments"], capabilities: new Set() },
-};
-
 interface AppPermissionsContextValue {
   userId: MockUserId;
-  setUserId: (id: MockUserId) => void;
-  /** Base (unprefixed) permissions for the selected mock user — see MockUser.scopeIds. */
+  setUserId: (id: MockUserId) => Promise<void>;
   permissions: Permissions;
 }
 
-const defaultUser = MOCK_USERS.admin;
+const defaultPermissions = permissionsFor(DEFAULT_MOCK_USER_ID);
 const AppPermissionsContext = createContext<AppPermissionsContextValue>({
-  userId: "admin",
-  setUserId: () => {},
-  permissions: { scopeIds: defaultUser.scopeIds, capabilities: defaultUser.capabilities },
+  userId: DEFAULT_MOCK_USER_ID,
+  setUserId: async () => {},
+  permissions: defaultPermissions,
 });
 
 export function AppPermissionsProvider({ children }: { children: ReactNode }) {
-  const [userId, setUserId] = useState<MockUserId>("admin");
-  const permissions = useMemo<Permissions>(() => {
-    const user = MOCK_USERS[userId];
-    return { scopeIds: user.scopeIds, capabilities: user.capabilities };
-  }, [userId]);
+  const [userId, setUserIdState] = useState<MockUserId>(DEFAULT_MOCK_USER_ID);
+  const permissions = useMemo<Permissions>(() => permissionsFor(userId), [userId]);
+
+  // Await the cookie write before flipping local state, so the connector
+  // this triggers a refetch on the next render never races the server
+  // action that's supposed to already have updated by then.
+  const setUserId = useCallback(async (id: MockUserId) => {
+    await setPreviewUser(id);
+    setUserIdState(id);
+  }, []);
 
   return (
     <AppPermissionsContext.Provider value={{ userId, setUserId, permissions }}>

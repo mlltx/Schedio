@@ -89,14 +89,26 @@ export type {
 // PipelineGraphView never know the difference; they still just take one
 // `connector` prop. withScopeAccess is the RBAC seam: it filters a
 // connector's own snapshot down to the scopes one viewer may see, before
-// that data ever reaches compute.ts — see the "Access control" section of
-// the README.
+// that data ever reaches compute.ts. serializeSnapshot/deserializeSnapshot/
+// createProxyConnector are for running a connector (with withScopeAccess)
+// server-side instead of in the browser, so a viewer's dev tools never see
+// more than they're allowed to — see the "Access control" section of the
+// README, and web/'s app/api/snapshot/route.ts for a working example.
 // ---------------------------------------------------------------------------
-export { combineConnectors, withScopeAccess, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./model";
+export {
+  combineConnectors,
+  withScopeAccess,
+  serializeSnapshot,
+  deserializeSnapshot,
+  createProxyConnector,
+  DEFAULT_POLL_INTERVAL_MS,
+  resolvePollIntervalMs,
+} from "./model";
 export type {
   ConnectorFn,
   ConnectorSnapshot,
   ConnectorSourceStatus,
+  SerializedConnectorSnapshot,
   Job,
   Run,
   RunStatus,

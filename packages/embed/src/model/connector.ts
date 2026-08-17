@@ -714,3 +714,68 @@ export function withScopeAccess(connector: ConnectorFn, allowedScopeIds: "all" |
 
   return scoped;
 }
+
+// ---------------------------------------------------------------------------
+// Server-side connectors: GlanceView/JobDetail/PipelineGraphView are client
+// components that call `connector` directly in the browser, which is only
+// ever as private as the browser's own network tab — `withScopeAccess`
+// filters what Schedio renders, not what the connector's own fetch put on
+// the wire before that. Running the connector (wrapped in `withScopeAccess`)
+// somewhere the viewer can't inspect the traffic — a server component or API
+// route — closes that gap, and these two functions are the seam for it:
+// serialize a snapshot to plain JSON server-side, deserialize it back into a
+// real ConnectorFn result client-side. Framework-agnostic on purpose (no
+// `next/server` import here) — the same pattern works behind an Express
+// route or anything else that can return JSON.
+// ---------------------------------------------------------------------------
+
+/** `ConnectorSnapshot` with its non-JSON-safe `Map`/`Set` fields flattened to arrays — what `serializeSnapshot` produces and `deserializeSnapshot`/`createProxyConnector` expect back. */
+export interface SerializedConnectorSnapshot {
+  jobs: Job[];
+  scopes: Scope[];
+  runsByJobId: [string, Run[]][];
+  reachableScopeIds: string[];
+  lastSyncedAt: string;
+  sources?: Record<string, ConnectorSourceStatus>;
+}
+
+/** `ConnectorSnapshot` -> plain JSON, for returning a snapshot from a server-side endpoint. */
+export function serializeSnapshot(snapshot: ConnectorSnapshot): SerializedConnectorSnapshot {
+  return {
+    ...snapshot,
+    runsByJobId: [...snapshot.runsByJobId],
+    reachableScopeIds: [...snapshot.reachableScopeIds],
+  };
+}
+
+/** The inverse of `serializeSnapshot` — JSON back into a real `ConnectorSnapshot`. */
+export function deserializeSnapshot(serialized: SerializedConnectorSnapshot): ConnectorSnapshot {
+  return {
+    ...serialized,
+    runsByJobId: new Map(serialized.runsByJobId),
+    reachableScopeIds: new Set(serialized.reachableScopeIds),
+  };
+}
+
+/**
+ * Builds a `ConnectorFn` that talks to your own same-origin endpoint instead
+ * of a backend directly — the client-side half of the server-side-connector
+ * pattern above. `fetchSnapshot` is whatever `fetch()`-and-decode call reaches
+ * that endpoint; you own the request shape (query params, headers, method).
+ *
+ * Like any `ConnectorFn`, this must not throw — a failed request should
+ * resolve to a snapshot reporting itself unreachable (see `unreachableSnapshot`
+ * in `@schedio/connector-airflow`'s `connector.ts` for the pattern), not
+ * reject, so a network hiccup reads as "can't confirm status" rather than
+ * crashing the view.
+ */
+export function createProxyConnector(options: {
+  fetchSnapshot: (now: Date, reachabilityOverrides: Record<string, boolean>) => Promise<SerializedConnectorSnapshot>;
+  pollIntervalMs?: number;
+}): ConnectorFn {
+  const connector: ConnectorFn = async (now, reachabilityOverrides) =>
+    deserializeSnapshot(await options.fetchSnapshot(now, reachabilityOverrides));
+
+  if (options.pollIntervalMs !== undefined) connector.pollIntervalMs = options.pollIntervalMs;
+  return connector;
+}

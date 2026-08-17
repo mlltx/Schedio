@@ -1,37 +1,35 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { ConnectorFn } from "@schedio/embed";
-import { combinedDemoConnector } from "@/lib/demoConnectors";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 /**
  * Same shape as AppTenantProvider: which connector mode is selected is our
  * own demo-preview state, not something @schedio/embed's components know
- * or care about — they only ever see a `connector` prop (or its absence,
- * meaning "use the built-in mock"). Switching modes here is exactly what a
- * real host does by passing a different `connector` prop; nothing else
- * about GlanceView/JobDetail/PipelineGraphView changes either way.
+ * or care about. Unlike before app/api/snapshot/route.ts existed, this
+ * provider no longer builds an actual `ConnectorFn` itself — the connector
+ * (single mock vs. the combined two-region mock) is now resolved
+ * server-side, inside that route, from the same `mode` value read here (see
+ * useScopedConnector, which sends it along as a query param). `mode` on its
+ * own carries no access implications — it only picks which mock dataset to
+ * use — so trusting it straight from client state is fine; the value that
+ * actually matters for access, the current viewer, deliberately isn't
+ * tracked here at all (see AppPermissionsProvider).
  */
 export type ConnectorMode = "single" | "combined";
 
 interface AppConnectorContextValue {
   mode: ConnectorMode;
   setMode: (mode: ConnectorMode) => void;
-  /** undefined in "single" mode — GlanceView/JobDetail default to the built-in mock connector themselves. */
-  connector: ConnectorFn | undefined;
 }
 
 const AppConnectorContext = createContext<AppConnectorContextValue>({
   mode: "single",
   setMode: () => {},
-  connector: undefined,
 });
 
 export function AppConnectorProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ConnectorMode>("single");
-  const connector = useMemo(() => (mode === "combined" ? combinedDemoConnector : undefined), [mode]);
-
-  return <AppConnectorContext.Provider value={{ mode, setMode, connector }}>{children}</AppConnectorContext.Provider>;
+  return <AppConnectorContext.Provider value={{ mode, setMode }}>{children}</AppConnectorContext.Provider>;
 }
 
 export function useAppConnector(): AppConnectorContextValue {

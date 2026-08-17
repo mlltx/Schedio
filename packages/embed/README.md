@@ -240,12 +240,65 @@ there is real filtering with zero setup — restricted data never reaches
 Schedio's rendered UI or React state. But a technically curious viewer with
 dev tools open could still see the connector's raw network response before
 `withScopeAccess` discards the disallowed parts, the same as any client-side
-check. For a real boundary against that, run the connector (with this
-wrapper) somewhere the viewer can't inspect the traffic — a server component
-or API route the client-side `ConnectorFn` calls instead of hitting your
-backend directly — so unfiltered data never crosses the network to the
-browser. If your backend already authenticates per-viewer and enforces its
-own access control, this wrapper is redundant defense-in-depth either way.
+check. If your backend already authenticates per-viewer and enforces its own
+access control, this wrapper is redundant defense-in-depth and the gap
+doesn't apply to you. Otherwise, close it by running the connector (with
+this wrapper) somewhere the viewer can't inspect the traffic instead —
+that's what the rest of this section is for.
+
+### Running a connector server-side
+
+`@schedio/embed/server` is a second entry point exporting the model layer
+only — `mockConnector`, `withScopeAccess`, `getGlanceView`, everything in
+["Connecting your real data"](#connecting-your-real-data) above — with zero
+React or DOM dependency, so it's safe to import from a Server Component, a
+Route Handler, or any other server-only environment. (It has to be a
+separate entry point rather than something you can just import from
+`@schedio/embed` server-side: the package root bundles the components
+together with the model layer under one `"use client"` directive, since
+that's what the components need in the browser, and a bundler enforcing
+React Server Component boundaries — Next.js included — then treats
+*everything* in that bundle as client-only, plain functions like
+`mockConnector` included.)
+
+`serializeSnapshot`/`deserializeSnapshot` bridge the gap a `ConnectorSnapshot`
+otherwise can't cross as JSON (its `Map`/`Set` fields aren't
+`JSON.stringify`-safe), and `createProxyConnector` builds the client-side
+half: a `ConnectorFn` that fetches your own endpoint instead of a backend
+directly.
+
+```ts
+// app/api/snapshot/route.ts (server-only)
+import { mockConnector, withScopeAccess, serializeSnapshot } from "@schedio/embed/server";
+
+export async function GET(request: Request) {
+  const permissions = await resolvePermissionsFromSession(request); // your own auth
+  const snapshot = await withScopeAccess(mockConnector, permissions.scopeIds)(new Date(), {});
+  return Response.json(serializeSnapshot(snapshot));
+}
+```
+
+```ts
+// wherever you build the `connector` prop (client-side)
+import { createProxyConnector } from "@schedio/embed";
+
+const connector = createProxyConnector({
+  fetchSnapshot: async (now, reachabilityOverrides) => {
+    const res = await fetch("/api/snapshot");
+    return res.json(); // must not throw — see createProxyConnector's own docs
+  },
+});
+
+<GlanceView connector={connector} />
+```
+
+The browser now only ever receives whatever the route already decided to
+send back — `permissions.scopeIds` never has to reach the client at all,
+so it can't be read off the wire or overridden by an edited query param.
+See `web/`'s `app/api/snapshot/route.ts` and `setPreviewUser`/
+`AppPermissionsProvider` for a complete working example, including
+resolving the viewer from an httpOnly cookie rather than trusting anything
+client-supplied.
 
 For actions rather than data — an eventual "acknowledge this failure" or
 "retrigger this run" — pair this with `PermissionsProvider`:
