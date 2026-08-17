@@ -41,6 +41,15 @@ export { DEFAULT_TENANT_CONFIG, TENANT_PRESETS } from "./config/presets";
 export type { TenantConfig, Brand, BrandColors, TenantCopy } from "./config/types";
 
 // ---------------------------------------------------------------------------
+// RBAC: who can see what, and (eventually) do what. Pair `withScopeAccess`
+// below with `PermissionsProvider` — one `Permissions` value, resolved once
+// from your own auth, feeds both.
+// ---------------------------------------------------------------------------
+export { PermissionsProvider, usePermissions } from "./permissions/PermissionsProvider";
+export { FULL_ACCESS_PERMISSIONS, hasCapability } from "./permissions/types";
+export type { Capability, Permissions } from "./permissions/types";
+
+// ---------------------------------------------------------------------------
 // The model layer, for anyone who wants to call getGlanceView/getJobDetail
 // directly (e.g. server-side, or to build a custom UI on top of the same
 // computed data instead of using GlanceView/JobDetail).
@@ -78,9 +87,12 @@ export type {
 // combineConnectors merges several into one (multiple instances of the
 // same backend, or several different backends) — GlanceView/JobDetail/
 // PipelineGraphView never know the difference; they still just take one
-// `connector` prop.
+// `connector` prop. withScopeAccess is the RBAC seam: it filters a
+// connector's own snapshot down to the scopes one viewer may see, before
+// that data ever reaches compute.ts — see the "Access control" section of
+// the README.
 // ---------------------------------------------------------------------------
-export { combineConnectors, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./model";
+export { combineConnectors, withScopeAccess, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./model";
 export type {
   ConnectorFn,
   ConnectorSnapshot,

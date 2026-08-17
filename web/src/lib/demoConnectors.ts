@@ -17,6 +17,9 @@ function withRegionLabel(connector: ConnectorFn, label: string): ConnectorFn {
   };
 }
 
+/** The two source keys `combinedDemoConnector` namespaces scope/job ids under — see useScopedConnector, which needs these to expand a restricted user's base scope ids per-region. */
+export const DEMO_REGIONS = ["us-east", "eu-west"] as const;
+
 /**
  * Two "Airflow instances" combined into one view — both backed by the same
  * built-in mock data, standing in for what a real deployment would do with
@@ -25,6 +28,6 @@ function withRegionLabel(connector: ConnectorFn, label: string): ConnectorFn {
  * section and the connector architecture design doc for the real thing.
  */
 export const combinedDemoConnector: ConnectorFn = combineConnectors({
-  "us-east": withRegionLabel(mockConnector, "US-East"),
-  "eu-west": withRegionLabel(mockConnector, "EU-West"),
+  [DEMO_REGIONS[0]]: withRegionLabel(mockConnector, "US-East"),
+  [DEMO_REGIONS[1]]: withRegionLabel(mockConnector, "EU-West"),
 });

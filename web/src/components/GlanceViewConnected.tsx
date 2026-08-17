@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { GlanceView } from "@schedio/embed";
-import { useAppConnector } from "./AppConnectorProvider";
+import { useScopedConnector } from "./useScopedConnector";
 import { jobHref } from "@/lib/jobRoutes";
 
 /**
@@ -12,13 +12,15 @@ import { jobHref } from "@/lib/jobRoutes";
  * navigation instead of a full page reload. @schedio/embed doesn't know
  * Next.js exists — this is the one place that bridges the two.
  *
- * `connector` is undefined in "single" mode (GlanceView's own default
- * mock connector) and a `combineConnectors` result in "combined" mode —
- * see AppConnectorProvider. GlanceView itself doesn't know or care which.
+ * `connector` is the mock connector (single mode) or a `combineConnectors`
+ * result (combined mode) — see AppConnectorProvider — filtered down to the
+ * current mock user's scope access via `withScopeAccess` — see
+ * useScopedConnector/AppPermissionsProvider. GlanceView itself doesn't know
+ * or care which connector mode is active, or that RBAC is involved at all.
  */
 export function GlanceViewConnected() {
   const router = useRouter();
-  const { connector } = useAppConnector();
+  const connector = useScopedConnector();
   return (
     <GlanceView
       connector={connector}

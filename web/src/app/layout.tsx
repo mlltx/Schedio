@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppTenantProvider } from "@/components/AppTenantProvider";
 import { AppConnectorProvider } from "@/components/AppConnectorProvider";
+import { AppPermissionsProvider } from "@/components/AppPermissionsProvider";
 import "@schedio/embed/style.css";
 import "./globals.css";
 
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <AppTenantProvider>
-          <AppConnectorProvider>{children}</AppConnectorProvider>
+          <AppConnectorProvider>
+            <AppPermissionsProvider>{children}</AppPermissionsProvider>
+          </AppConnectorProvider>
         </AppTenantProvider>
       </body>
     </html>

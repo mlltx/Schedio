@@ -617,3 +617,100 @@ export function combineConnectors(connectors: Record<string, ConnectorFn>): Conn
 
   return combined;
 }
+
+// ---------------------------------------------------------------------------
+// withScopeAccess — the RBAC seam. A host doesn't hand Schedio a role or a
+// login; it hands it the one thing Schedio actually needs, the resolved set
+// of scope ids the current viewer may see, and this wrapper enforces it the
+// same way combineConnectors merges: by transforming ConnectorFn -> ConnectorFn,
+// so nothing in compute.ts or any component has to know access control
+// exists at all.
+// ---------------------------------------------------------------------------
+
+/**
+ * Filters a connector's snapshot down to only `allowedScopeIds` before it
+ * ever reaches `compute.ts` (or a component) — never a UI hide layered on
+ * top of unfiltered data. Restricted scopes never reach Schedio's rendered
+ * UI or React state, full stop.
+ *
+ * How strong a guarantee that actually is depends on *where* `connector`
+ * itself runs, because `GlanceView`/`JobDetail` are client components that
+ * call it directly in the browser. Wrap it there (the default, works with
+ * zero setup) and this is real filtering plus a real UX guarantee, but a
+ * technically curious viewer with dev tools open could still see the
+ * connector's raw network response before this function discards the
+ * disallowed parts — the same way any client-side check can be inspected.
+ * For a real security boundary against that, call the connector (with this
+ * wrapper) somewhere the viewer can't inspect the traffic — a Next.js
+ * Server Component or API route the client-side `ConnectorFn` calls
+ * instead of hitting the backend directly — so the unfiltered response
+ * never crosses the network to the browser at all. Either placement
+ * composes identically; this function doesn't care which.
+ *
+ * The other case this matters for: a backend that already authenticates
+ * per-user (the viewer's own Airflow credentials, not one shared
+ * admin-configured token) and enforces its own access control makes this
+ * wrapper redundant defense-in-depth rather than the only guard — also
+ * unaffected by where it runs.
+ *
+ * `"all"` is a pass-through (every scope visible, unchanged) — the common
+ * case for an unrestricted viewer, without a caller needing to enumerate
+ * every scope id that might ever exist.
+ *
+ * A restricted scope disappears entirely — not just its jobs, but any trace
+ * that it exists: its own scope entry, and any `dependsOn` edge a visible
+ * job had pointing into it (silently dropped, the same "an honest gap beats
+ * a misleading edge" call `@schedio/connector-airflow` makes for
+ * dependencies it can't map — a raw id from a scope you can't see would
+ * otherwise leak into `JobDetailView.dependsOnNames` and crash the
+ * dependency graph, which builds every node from a `statusMap` that no
+ * longer has an entry for it).
+ *
+ * Composable with `combineConnectors` in either order: wrap a single
+ * source's connector before combining it (scope ids in that source's own,
+ * unprefixed namespace) or wrap the already-combined connector (scope ids
+ * in the merged, prefixed namespace) — whichever matches the shape the
+ * caller's scope ids are already in.
+ */
+export function withScopeAccess(connector: ConnectorFn, allowedScopeIds: "all" | string[]): ConnectorFn {
+  if (allowedScopeIds === "all") return connector;
+  const allowed = new Set(allowedScopeIds);
+
+  const scoped: ConnectorFn = async (now, reachabilityOverrides) => {
+    const snapshot = await connector(now, reachabilityOverrides);
+
+    // Drop any "all" scope the connector reported itself — it aggregated
+    // over jobs some of which are about to disappear, so it's stale;
+    // prepareData() synthesizes a fresh one over exactly what's left.
+    const scopes = snapshot.scopes.filter((s) => s.kind !== "all" && allowed.has(s.id));
+    const visibleJobs = snapshot.jobs.filter((j) => allowed.has(j.scopeId));
+    const visibleJobIds = new Set(visibleJobs.map((j) => j.id));
+    const jobs = visibleJobs.map((j) => ({ ...j, dependsOn: j.dependsOn.filter((id) => visibleJobIds.has(id)) }));
+    const runsByJobId = new Map([...snapshot.runsByJobId].filter(([jobId]) => visibleJobIds.has(jobId)));
+    const reachableScopeIds = new Set([...snapshot.reachableScopeIds].filter((id) => allowed.has(id)));
+
+    // If this snapshot came from combineConnectors, don't let a source
+    // whose scopes are entirely hidden still announce its own existence
+    // (reachability, sync time) through `sources` — same "no trace" rule
+    // as everything else here.
+    const sources = snapshot.sources
+      ? Object.fromEntries(
+          Object.entries(snapshot.sources)
+            .map(([key, status]): [string, ConnectorSourceStatus] => [
+              key,
+              { ...status, scopeIds: status.scopeIds.filter((id) => allowed.has(id)) },
+            ])
+            .filter(([, status]) => status.scopeIds.length > 0),
+        )
+      : undefined;
+
+    return { ...snapshot, scopes, jobs, runsByJobId, reachableScopeIds, sources };
+  };
+
+  // Forward the wrapped connector's own polling preference unchanged (unset
+  // included) — filtering who can see a connector's data shouldn't change
+  // how often it's polled.
+  if (connector.pollIntervalMs !== undefined) scoped.pollIntervalMs = connector.pollIntervalMs;
+
+  return scoped;
+}

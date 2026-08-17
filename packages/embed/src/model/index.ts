@@ -61,7 +61,7 @@ export { isNonHealthySeverity } from "./compute";
 // only someone implementing a real connector needs them.
 export type { Job, Run, RunStatus, Schedule, Sla, Cadence } from "./types";
 export type { ConnectorFn, ConnectorSnapshot, ConnectorSourceStatus } from "./connector";
-export { mockConnector, combineConnectors, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./connector";
+export { mockConnector, combineConnectors, withScopeAccess, DEFAULT_POLL_INTERVAL_MS, resolvePollIntervalMs } from "./connector";
 
 /**
  * A connector's own scopes — async because they're connector-reported now,

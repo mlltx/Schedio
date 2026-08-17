@@ -210,6 +210,63 @@ independently (`reachable` here means "this connector's fetch succeeded",
 not "and every one of its scopes is currently up" — which scope is
 specifically down is what per-scope `reachableScopeIds` is still for).
 
+## Access control (RBAC)
+
+Schedio doesn't own identity — no login, no user store, no role system. A
+host that embeds it already has one (its own SSO, its own IdP), and hands
+Schedio the one thing it actually needs: which scopes the current viewer
+may see. That's `withScopeAccess`, a connector wrapper in the same spirit
+as `combineConnectors`:
+
+```ts
+import { withScopeAccess } from "@schedio/embed";
+
+const connector = withScopeAccess(myConnector, ["data-platform", "payments"]);
+// or, for an unrestricted viewer:
+const connector = withScopeAccess(myConnector, "all");
+
+<GlanceView connector={connector} />
+```
+
+A restricted scope disappears entirely — not just its jobs, but any trace
+it exists at all: its scope entry, and any dependency edge a visible job
+had pointing into it. It's composable with `combineConnectors` in either
+order (wrap one source before combining, or wrap the merged result — scope
+ids just need to be in whichever namespace you're filtering at).
+
+**Where this actually runs matters.** `GlanceView`/`JobDetail` are client
+components that call `connector` directly in the browser, so wrapping it
+there is real filtering with zero setup — restricted data never reaches
+Schedio's rendered UI or React state. But a technically curious viewer with
+dev tools open could still see the connector's raw network response before
+`withScopeAccess` discards the disallowed parts, the same as any client-side
+check. For a real boundary against that, run the connector (with this
+wrapper) somewhere the viewer can't inspect the traffic — a server component
+or API route the client-side `ConnectorFn` calls instead of hitting your
+backend directly — so unfiltered data never crosses the network to the
+browser. If your backend already authenticates per-viewer and enforces its
+own access control, this wrapper is redundant defense-in-depth either way.
+
+For actions rather than data — an eventual "acknowledge this failure" or
+"retrigger this run" — pair this with `PermissionsProvider`:
+
+```tsx
+import { PermissionsProvider } from "@schedio/embed";
+
+<PermissionsProvider permissions={{ scopeIds: ["data-platform"], capabilities: new Set(["acknowledge_run"]) }}>
+  <GlanceView connector={connector} />
+</PermissionsProvider>
+```
+
+Resolve one `Permissions` value from your own auth and feed it to both —
+`scopeIds` into `withScopeAccess`, the whole object into `PermissionsProvider`
+— so scope access and capabilities never drift out of sync as two
+independently-tracked variables. Nothing in `packages/embed` renders a
+write action yet (see MISSION.md's "read-first, write-second"), so
+`Capability`/`hasCapability` have no consumer today — they exist so gating
+the first one is a one-line check against an already-established shape,
+not a new mechanism designed under deadline.
+
 ## Branding and terminology
 
 `TenantConfigProvider` takes a single `config` prop — no config means

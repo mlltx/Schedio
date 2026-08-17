@@ -203,6 +203,80 @@ while it happens to poll." Fixing this properly needs a content-based diff
 (same node/focus set) instead of reference equality; see the comment at
 the `usePromise` call site in `PipelineGraphView.tsx`.
 
+### Access control (RBAC)
+
+Schedio doesn't own identity — no login, no user store, no role hierarchy.
+A host embedding it already has one; RBAC is a seam like data and
+branding, not a feature Schedio implements itself. It splits into two
+independent pieces:
+
+**Visibility** (which scopes a viewer can see) is `withScopeAccess`
+(`model/connector.ts`), a `ConnectorFn -> ConnectorFn` wrapper in the same
+spirit as `combineConnectors` — filters `scopes`/`jobs`/`runsByJobId`/
+`reachableScopeIds`/`sources` down to an allowed set (or passes through
+unchanged for `"all"`) before the snapshot ever reaches `compute.ts`. Two
+things it has to do carefully, both covered by proof-script verification
+before this shipped: drop any `dependsOn` id pointing into a filtered-out
+scope (otherwise it leaks a raw id into `JobDetailView.dependsOnNames` and
+crashes `buildDependencyGraph`, which builds every node from a `statusMap`
+that no longer has an entry for it — see "an honest gap beats a misleading
+edge", the same call `@schedio/connector-airflow` makes for dependencies it
+can't map), and drop any `"all"`-kind scope the connector reported itself
+(it aggregated over jobs that are about to disappear — `prepareData()`'s
+`withAggregateScope()` synthesizes a fresh one over exactly what's left, so
+this doesn't need to be special-cased). Composable with `combineConnectors`
+in either order — wrap a single source before combining (unprefixed scope
+ids) or wrap the merged result (prefixed) — because it's just another
+`ConnectorFn` transform.
+
+**How strong a guarantee this is depends on where `connector` runs.**
+`GlanceView`/`JobDetail` are client components that call it directly in the
+browser, so wrapping it there stops restricted data from ever reaching
+Schedio's rendered UI or React state — but the connector's raw network
+response is still visible to anyone with dev tools open before this
+function discards the disallowed parts, the same as any client-side check.
+A real boundary against that means running the connector (with this
+wrapper) somewhere the viewer can't inspect the traffic — a server
+component or API route the client-side `ConnectorFn` calls instead of
+hitting the backend directly. Don't oversell "hard boundary" language here
+without that qualifier.
+
+**Capabilities** (which actions a viewer may take) is `Capability`/
+`Permissions`/`hasCapability` (`permissions/types.ts`) plus
+`PermissionsProvider`/`usePermissions` (`permissions/PermissionsProvider.tsx`)
+— a context mirroring `TenantConfigProvider` exactly (one value prop, no
+internal "switch user" state, defaults to `FULL_ACCESS_PERMISSIONS` when
+unwrapped so RBAC stays fully opt-in). Nothing in `packages/embed` renders
+a write action yet (`MISSION.md`'s "read-first, write-second"), so this has
+zero consumers today — it exists so the first write feature gates itself
+with a one-line `hasCapability` check against an already-established shape
+instead of inventing a mechanism under deadline. Real enforcement for any
+write, once one exists, always happens server-side (proxied through the
+model boundary to the native engine); a `Capability` check only decides
+what the UI offers to attempt.
+
+Deliberately **not** in `packages/embed`: named role presets ("Viewer"/
+"Admin"). Only the raw `{ scopeIds, capabilities }` primitives are
+exposed — a host maps its own IdP roles/groups into that shape however it
+wants, rather than Schedio inventing a role taxonomy that competes with
+whatever the host's real auth system already has.
+
+`web/`'s own demo has no real login either, so it fakes one the same way
+it fakes multiple tenants/connectors: `AppPermissionsProvider` holds an
+in-memory "which mock user" selection (`admin` / `data-platform-viewer` /
+`payments-viewer`), and `useScopedConnector` (`web/src/components/`) is
+where every `*Connected` component gets its connector from — it composes
+`AppConnectorProvider`'s mode-selected connector with the current mock
+user's `withScopeAccess` filter in one place, so the RBAC wrapper can't be
+forgotten on any individual view. It also expands a restricted user's base
+scope ids per-region when the combined connector is active
+(`"data-platform"` → `"us-east:data-platform"` + `"eu-west:data-platform"`)
+— a restricted viewer should see their team on every instance they have
+access to, not just whichever region happened to come first in the merge.
+Like every other preview switcher here, the selection is in-memory only
+and resets on a hard reload — a real deployment resolves `Permissions` from
+a verified session on every request, not client `useState`.
+
 ### Embeddability: no assumed host
 
 `GlanceView`/`JobDetail` never import `next/link` or `next/navigation` —

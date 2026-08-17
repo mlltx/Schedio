@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { JobDetail } from "@schedio/embed";
-import { useAppConnector } from "./AppConnectorProvider";
+import { useScopedConnector } from "./useScopedConnector";
 import { jobHref, jobPipelineHref } from "@/lib/jobRoutes";
 
 export function JobDetailConnected({ jobId }: { jobId: string }) {
   const router = useRouter();
-  const { connector } = useAppConnector();
+  const connector = useScopedConnector();
   return (
     <JobDetail
       jobId={jobId}
