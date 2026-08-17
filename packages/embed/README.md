@@ -210,6 +210,15 @@ independently (`reachable` here means "this connector's fetch succeeded",
 not "and every one of its scopes is currently up" — which scope is
 specifically down is what per-scope `reachableScopeIds` is still for).
 
+`GlanceView` surfaces this directly: whenever `sources` is present (i.e.
+you're viewing a `combineConnectors` result), a small status strip near the
+top shows one dot per source — green and just its id in the common case,
+spelling out "Unreachable" inline the moment one isn't, rather than making
+someone infer a whole backend is down from a drop in job counts. Nothing to
+opt into; it's driven by `getAllScopeStatuses`' `sources` field, which is
+`undefined` for a single (non-combined) connector and absent from the UI
+accordingly.
+
 ## Access control (RBAC)
 
 Schedio doesn't own identity — no login, no user store, no role system. A

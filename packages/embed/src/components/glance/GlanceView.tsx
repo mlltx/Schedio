@@ -8,6 +8,7 @@ import { ScopeSwitcher } from "./ScopeSwitcher";
 import { TimeWindowPicker } from "./TimeWindowPicker";
 import { ExceptionList } from "./ExceptionList";
 import { DemoControls } from "./DemoControls";
+import { SourceStatusStrip } from "./SourceStatusStrip";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";
 import type { JobNavigation } from "./navigation";
@@ -76,10 +77,11 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
       style={style}
       className={cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className)}
     >
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <span className="truncate text-sm font-semibold tracking-widest text-zinc-400 uppercase dark:text-zinc-500">
           {tenant.brand.productName}
         </span>
+        {data?.sources && data.sources.length > 0 && <SourceStatusStrip sources={data.sources} />}
       </div>
 
       <div className="mb-6 overflow-x-auto">

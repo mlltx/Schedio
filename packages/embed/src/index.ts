@@ -67,6 +67,7 @@ export type {
   Scope,
   ScopeStatus,
   AllScopeStatuses,
+  SourceStatus,
   JobStatus,
   JobDetailView,
   DependencyGraph,

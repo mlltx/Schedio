@@ -155,6 +155,19 @@ would otherwise silently corrupt the merge. One source failing outright
 `reachable`/`lastSyncedAt` surfaces independently via the snapshot's
 optional `sources` field.
 
+That field reaches the UI too, not just the model: `getAllScopeStatuses`
+(`model/index.ts`) turns it into `SourceStatus[]` — one entry per source,
+in registration order, `statusCopy` already rendered as plain language
+("Synced 12s ago" / "Unreachable") the same way every other piece of copy
+in this layer is computed rather than left for a component to derive.
+`GlanceView` renders it via `SourceStatusStrip`
+(`components/glance/SourceStatusStrip.tsx`) only when `sources` is
+present — a single (non-combined) connector has nothing to show here, since
+its one source's reachability is already covered by its scopes' own
+`connectorReachable`. This answers "is Airflow-staging itself up" directly,
+without needing to infer a whole backend's health from a drop in job
+counts across its scopes.
+
 Real (non-mock) connectors live as **separate workspace packages**, never
 inside `packages/embed` itself — `packages/connector-airflow/` is the
 first one. This is the whole point: installing/using the Airflow connector

@@ -285,10 +285,33 @@ export async function getGlanceView(scopeId: string, window: TimeWindow, options
   return buildScopeStatus(scope, window, prepared);
 }
 
+/**
+ * One connector `combineConnectors` merged, independent of any scope/job's
+ * own status — "is Airflow-staging itself reachable" is a different
+ * question from "is any job in Airflow-staging healthy", and this answers
+ * the first one directly rather than making a viewer infer it from job
+ * counts. `statusCopy` is already in plain language, computed here rather
+ * than left for a component to derive, same as every other piece of copy
+ * in this model layer.
+ */
+export interface SourceStatus {
+  /** The key this source was registered under in `combineConnectors`, e.g. `"airflow-prod"`. */
+  id: string;
+  reachable: boolean;
+  statusCopy: string;
+}
+
 export interface AllScopeStatuses {
   /** Every scope this connector (or combination of connectors) reported, in the order it reported them. */
   scopes: Scope[];
   statuses: Record<string, ScopeStatus>;
+  /**
+   * One entry per source `combineConnectors` merged, in registration order —
+   * `undefined` for a single (non-combined) connector, since there's only
+   * ever one source and its reachability is already covered by its scopes'
+   * own `connectorReachable`.
+   */
+  sources?: SourceStatus[];
 }
 
 /**
@@ -301,10 +324,17 @@ export interface AllScopeStatuses {
  */
 export async function getAllScopeStatuses(window: TimeWindow, options: GlanceViewOptions = {}): Promise<AllScopeStatuses> {
   const prepared = await prepareData(options);
-  const { scopes } = prepared.snapshot;
+  const { scopes, sources } = prepared.snapshot;
   return {
     scopes,
     statuses: Object.fromEntries(scopes.map((scope) => [scope.id, buildScopeStatus(scope, window, prepared)])),
+    sources: sources
+      ? Object.entries(sources).map(([id, status]) => ({
+          id,
+          reachable: status.reachable,
+          statusCopy: status.reachable ? `Synced ${formatRelative(status.lastSyncedAt, prepared.now)}` : "Unreachable",
+        }))
+      : undefined,
   };
 }
 
