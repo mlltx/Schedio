@@ -32,6 +32,7 @@ export function createAirflowConnector(config: AirflowConnectorConfig): Connecto
   const durationSampleSize = config.durationSampleSize ?? 10;
   const instanceName = config.name ?? config.id;
   const instanceScope: Scope = { id: config.id, name: instanceName, kind: "team" };
+  const uiBaseUrl = config.uiBaseUrl ?? config.baseUrl;
 
   const connector: ConnectorFn = async (now, reachabilityOverrides): Promise<ConnectorSnapshot> => {
     // The override key is this connector's own `id` — not a per-scope id
@@ -65,6 +66,7 @@ export function createAirflowConnector(config: AirflowConnectorConfig): Connecto
             scopeId: scopeIdByDagId.get(dag.dag_id)!,
             averageDurationMinutes: computeAverageDurationMinutes(runs),
             graceMinutes,
+            uiBaseUrl,
           }),
         );
       }

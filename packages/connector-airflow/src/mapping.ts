@@ -52,7 +52,7 @@ export function computeAverageDurationMinutes(runs: Run[]): number {
 
 export function mapDagToJob(
   dag: AirflowDag,
-  opts: { scopeId: string; averageDurationMinutes: number; graceMinutes: number },
+  opts: { scopeId: string; averageDurationMinutes: number; graceMinutes: number; uiBaseUrl: string },
 ): Job {
   const owners = dag.owners?.filter(Boolean) ?? [];
   return {
@@ -68,6 +68,10 @@ export function mapDagToJob(
     // than guessed: a missing edge is an honest gap; a wrong one would
     // actively mislead triage, which is worse.
     dependsOn: [],
+    // Airflow 3's own DAG page — same URL Airflow's UI itself links to for
+    // this DAG's grid view.
+    sourceUrl: `${opts.uiBaseUrl}/dags/${encodeURIComponent(dag.dag_id)}/grid`,
+    sourceLabel: "Airflow",
   };
 }
 

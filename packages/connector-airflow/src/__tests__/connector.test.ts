@@ -120,6 +120,34 @@ test("tag scope strategy is threaded through end to end", async () => {
   assert.deepEqual(scopeIds, ["airflow-prod-finance", "airflow-prod-platform"]);
 });
 
+test("sourceUrl links back to this DAG's grid view on the configured baseUrl by default", async () => {
+  const connector = createAirflowConnector({
+    id: "airflow-prod",
+    baseUrl: "https://airflow.example.com",
+    auth: { type: "token", token: "t" },
+    fetchImpl: fakeFetch(),
+  });
+
+  const snapshot = await connector(new Date(), {});
+  const revenueJob = snapshot.jobs.find((j) => j.id === "daily_revenue_etl");
+  assert.equal(revenueJob?.sourceUrl, "https://airflow.example.com/dags/daily_revenue_etl/grid");
+  assert.equal(revenueJob?.sourceLabel, "Airflow");
+});
+
+test("sourceUrl uses uiBaseUrl instead of baseUrl when the UI is hosted separately (e.g. Cloud Composer)", async () => {
+  const connector = createAirflowConnector({
+    id: "airflow-prod",
+    baseUrl: "https://api.internal.example.com",
+    uiBaseUrl: "https://airflow-ui.example.com",
+    auth: { type: "token", token: "t" },
+    fetchImpl: fakeFetch(),
+  });
+
+  const snapshot = await connector(new Date(), {});
+  const revenueJob = snapshot.jobs.find((j) => j.id === "daily_revenue_etl");
+  assert.equal(revenueJob?.sourceUrl, "https://airflow-ui.example.com/dags/daily_revenue_etl/grid");
+});
+
 test("pollIntervalMs is left unset when not configured, so @schedio/embed's default (30s) applies", () => {
   const connector = createAirflowConnector({
     id: "airflow-prod",

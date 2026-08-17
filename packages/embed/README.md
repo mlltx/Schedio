@@ -107,6 +107,34 @@ where the raw data came from. `showDemoControls` defaults to `false` once
 you pass a real `connector` (the built-in outage simulator only makes
 sense against the mock).
 
+## Linking back to the source
+
+Any `Job` your connector returns can carry an optional `sourceUrl` (and
+`sourceLabel`, e.g. `"Airflow"`) — a deep link back to that job in whatever
+system reported it. When set, `JobDetail` renders it as an "Open in
+{sourceLabel}" link next to the job's name, opening in a new tab. It's
+generic on purpose: one field every connector can populate, rather than
+Schedio needing to know about Airflow's DAG pages, Dagster's asset pages,
+or anyone else's UI specifically. Leave it unset for a backend with no UI
+of its own to link to — the built-in mock connector never sets it, since
+there's no real system behind it to open.
+
+```ts
+const myConnector: ConnectorFn = async (now, reachabilityOverrides) => ({
+  jobs: [
+    {
+      id: "daily_revenue_etl",
+      // ...
+      sourceUrl: "https://airflow.example.com/dags/daily_revenue_etl/grid",
+      sourceLabel: "Airflow",
+    },
+  ],
+  // ...
+});
+```
+
+`@schedio/connector-airflow` populates both automatically — see its README.
+
 ## Staying up to date: polling
 
 Every component re-polls its connector automatically — **every 30 seconds

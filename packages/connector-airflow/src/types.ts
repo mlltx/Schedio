@@ -53,6 +53,15 @@ export interface AirflowConnectorConfig {
   name?: string;
   /** e.g. "https://airflow.internal.example.com" — no trailing slash. */
   baseUrl: string;
+  /**
+   * Base URL of the Airflow *webserver UI*, if it's hosted separately from
+   * the REST API in `baseUrl` (some managed offerings, e.g. Cloud
+   * Composer, front the API and the UI at different hosts). Defaults to
+   * `baseUrl`, which is correct for a standard Airflow deployment where
+   * both are served from the same webserver. Used only to build each
+   * job's `sourceUrl` — the "Open in Airflow" link on its detail page.
+   */
+  uiBaseUrl?: string;
   auth: AirflowAuth;
   /**
    * "instance" (default): every DAG in this instance is one scope, named

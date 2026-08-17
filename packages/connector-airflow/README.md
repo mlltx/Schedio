@@ -54,6 +54,7 @@ doesn't need to know it's being combined, or with what.
 |---|---|---|---|
 | `id` | `string` | required | Identifies this instance — names its scope under the default scope strategy. |
 | `baseUrl` | `string` | required | No trailing slash, e.g. `https://airflow.example.com`. |
+| `uiBaseUrl` | `string` | `baseUrl` | Where the Airflow webserver UI lives, if different from `baseUrl` (e.g. Cloud Composer fronts the API and UI at different hosts). Used only to build each job's "Open in Airflow" link. |
 | `auth` | `{ type: "token"; token }` \| `{ type: "basic"; username; password }` | required | |
 | `name` | `string` | `id` | Display name for this instance's scope. |
 | `scopeStrategy` | `"instance"` \| `"tag"` | `"instance"` | See below. |
@@ -98,6 +99,7 @@ not required for parity with what Schedio shows today.
 | DAG run state `queued` | — | not reported — nothing to show until it starts |
 | — (no DAG-level SLA in Airflow) | `sla.expectedDurationMinutes` | average of the last `durationSampleSize` successful runs' actual durations |
 | `GET /api/v2/monitor/health` | `reachableScopeIds` | a failed check (or anything that throws after it passes) reports this instance fully unreachable |
+| `{uiBaseUrl}/dags/{dag_id}/grid` | `Job.sourceUrl` (+ `sourceLabel: "Airflow"`) | Airflow's own DAG grid view — rendered as an "Open in Airflow" link on the job's detail page in Schedio |
 
 ## Known limitations
 

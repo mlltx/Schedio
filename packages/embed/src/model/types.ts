@@ -56,6 +56,16 @@ export interface Job {
   sla: Sla;
   /** Upstream job ids this job waits on. */
   dependsOn: string[];
+  /**
+   * Deep link back to this job in whatever system a connector reports it
+   * from (an Airflow DAG page, a Dagster asset page, ...). Optional and
+   * generic by design — one field every connector can populate rather than
+   * a new one per backend — and left unset by connectors with no UI of
+   * their own to link to (the built-in mock connector never sets it).
+   */
+  sourceUrl?: string;
+  /** Short name for the source link, e.g. "Airflow". Falls back to a generic label in the UI when omitted. */
+  sourceLabel?: string;
 }
 
 export type RunStatus = "success" | "failed" | "running" | "retrying";
@@ -180,6 +190,9 @@ export interface JobDetailView {
     failureRatePercent: number;
     isTypicalToday: boolean;
   };
+  /** See `Job.sourceUrl` — carried through unchanged for the job detail page's "Open in ..." link. */
+  sourceUrl?: string;
+  sourceLabel?: string;
 }
 
 // ---------------------------------------------------------------------------

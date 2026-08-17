@@ -83,20 +83,33 @@ test("mapDagToJob joins multiple owners and falls back to the scope when a DAG d
     owners: ["alice", "data-eng"],
     timetable_summary: "0 6 * * *",
   };
-  const job = mapDagToJob(dag, { scopeId: "airflow-prod", averageDurationMinutes: 25, graceMinutes: 20 });
+  const job = mapDagToJob(dag, {
+    scopeId: "airflow-prod",
+    averageDurationMinutes: 25,
+    graceMinutes: 20,
+    uiBaseUrl: "https://airflow.example.com",
+  });
   assert.equal(job.id, "daily_revenue_etl");
   assert.equal(job.name, "Daily Revenue ETL");
   assert.equal(job.owner, "alice, data-eng");
   assert.deepEqual(job.schedule, { cadence: "daily", hour: 6, minute: 0 });
   assert.deepEqual(job.sla, { expectedDurationMinutes: 25, graceMinutes: 20 });
   assert.deepEqual(job.dependsOn, []);
+  assert.equal(job.sourceUrl, "https://airflow.example.com/dags/daily_revenue_etl/grid");
+  assert.equal(job.sourceLabel, "Airflow");
 
-  const unowned = mapDagToJob({ ...dag, owners: [] }, { scopeId: "airflow-prod", averageDurationMinutes: 25, graceMinutes: 20 });
+  const unowned = mapDagToJob(
+    { ...dag, owners: [] },
+    { scopeId: "airflow-prod", averageDurationMinutes: 25, graceMinutes: 20, uiBaseUrl: "https://airflow.example.com" },
+  );
   assert.equal(unowned.owner, "airflow-prod");
 });
 
 test("mapDagToJob falls back to dag_id when there's no display name", () => {
-  const job = mapDagToJob({ dag_id: "legacy_report_job" }, { scopeId: "s", averageDurationMinutes: 30, graceMinutes: 20 });
+  const job = mapDagToJob(
+    { dag_id: "legacy_report_job" },
+    { scopeId: "s", averageDurationMinutes: 30, graceMinutes: 20, uiBaseUrl: "https://airflow.example.com" },
+  );
   assert.equal(job.name, "legacy_report_job");
 });
 

@@ -321,6 +321,8 @@ export async function getJobDetail(
     expectedDurationLabel: formatDurationMinutes(job.sla.expectedDurationMinutes),
     dependsOnNames: job.dependsOn.map((id) => jobsById.get(id)?.name ?? id),
     dependencyGraph: buildDependencyGraph(jobId, 1, snapshot, statusMap),
+    sourceUrl: job.sourceUrl,
+    sourceLabel: job.sourceLabel,
     recentRuns: runs.slice(0, 10).map((r) => ({
       status: r.status,
       scheduledAt: r.scheduledAt,

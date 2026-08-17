@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
-import { Waypoints } from "lucide-react";
+import { ExternalLink, Waypoints } from "lucide-react";
 import { getJobDetail, mockConnector, resolvePollIntervalMs, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
 import { useTenantConfig } from "@/config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
@@ -122,6 +122,17 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl dark:text-zinc-50">
             {job.jobName}
           </h1>
+          {job.sourceUrl && (
+            <a
+              href={job.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              <ExternalLink className="h-3 w-3" aria-hidden />
+              Open in {job.sourceLabel ?? "source"}
+            </a>
+          )}
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${visual.bannerBg} ${visual.bannerText}`}

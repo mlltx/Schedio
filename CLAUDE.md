@@ -127,6 +127,18 @@ snapshot `prepareData()` prepares is guaranteed to have exactly one `kind:
 one) — a connector author doesn't need to remember this, it's not a
 contract that can be silently gotten wrong.
 
+`Job` also carries an optional `sourceUrl`/`sourceLabel` — a deep link back
+to that job in whatever system reported it (an Airflow DAG's grid view, a
+Dagster asset page, ...). Generic and connector-agnostic by design: one
+pair of fields any connector can populate, rather than Schedio's model
+knowing about any specific backend's URL scheme. `getJobDetail` carries it
+through unchanged into `JobDetailView` (raw passthrough, not triage logic —
+this is why it's wired in `model/index.ts`, not `compute.ts`), and
+`JobDetail` renders it as an "Open in {sourceLabel}" link next to the job's
+name, only when set. `mockConnector` never sets it (there's no real system
+behind it to open); `createAirflowConnector` always does, pointing at
+`{uiBaseUrl ?? baseUrl}/dags/{dag_id}/grid`.
+
 ### Multiple connectors, and real (non-mock) connector packages
 
 `combineConnectors` (in `model/connector.ts`, exported from the package
