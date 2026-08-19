@@ -361,6 +361,20 @@ for the full props reference. Keep these in sync if you add new top-level
 components: a component meant to be embedded that can't be ref'd, styled,
 or have its loading state overridden doesn't fit the pattern.
 
+`GlanceView` doesn't render a product-name header, on purpose — a host
+embedding it already has their own page chrome (nav, logo, whatever), and
+an embedded widget repeating the product name is exactly the "feels like a
+foreign iframe" failure MISSION.md's embeddability principle calls out.
+`JobDetail`/`PipelineGraphView` never had one either; `GlanceView` briefly
+did and it was removed. `web/`'s own hosted app is the one form where
+Schedio genuinely is the whole page, so it adds that header itself, as its
+own chrome — `AppHeader` (`web/src/components/`), rendered as a sibling of
+`GlanceViewConnected` in `page.tsx`, not inside it — reading the same
+`useTenantConfig()` the component itself would have used. This is the
+concrete version of "the hosted app is just the component with our own
+chrome... around it": literally the same JSX that used to live inside
+`packages/embed`, moved to the host layer where it belongs.
+
 ### The dependency graph
 
 `components/graph/` is a real graph view, not text pill lists: `JobDetail`
