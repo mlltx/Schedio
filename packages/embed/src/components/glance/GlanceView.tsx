@@ -12,6 +12,8 @@ import { SourceStatusStrip } from "./SourceStatusStrip";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";
 import type { JobNavigation } from "./navigation";
+import type { HeadingLevel } from "./Heading";
+import { useResolvedColorScheme, colorSchemeClassName, type ColorScheme } from "./colorScheme";
 
 const defaultLoading = () => (
   <div className="mt-6 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900" />
@@ -29,16 +31,51 @@ export interface GlanceViewProps extends JobNavigation {
   showDemoControls?: boolean;
   /** Replaces the default skeleton shown while the first fetch is in flight. */
   renderLoading?: () => ReactNode;
-  /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
+  /**
+   * Heading level for the "All needs attention"-style banner headline —
+   * the most prominent text in this view. Defaults to `1`; set it to
+   * match wherever this sits in the host page's own document outline
+   * (e.g. `2` if the host's page already has its own `<h1>`).
+   */
+  headingLevel?: HeadingLevel;
+  /**
+   * `"system"` (the default) follows the OS/browser preference. Set to
+   * `"light"`/`"dark"` to defer to a host's own theme toggle instead —
+   * see `components/glance/colorScheme.ts`.
+   */
+  colorScheme?: ColorScheme;
+  /**
+   * Caps the root element's width, same value shape as CSS `max-width`
+   * (`"56rem"`, `"100%"`, `640`, ...). Defaults to `"42rem"`. Applied as an
+   * inline style rather than a Tailwind class specifically so it's
+   * guaranteed to win — a `max-w-*` class on `className` has the exact
+   * same specificity as this component's own default `max-w-2xl` and
+   * would only override it by accident of stylesheet order, which a host
+   * can't rely on. Use this instead of fighting `className` for layout.
+   */
+  maxWidth?: string | number;
+  /** Merged onto the root element — the standard escape hatch for one-off layout nudges; not for structural overrides like width (see `maxWidth`). */
   className?: string;
   style?: CSSProperties;
 }
 
 export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function GlanceView(
-  { connector, showDemoControls, renderLoading = defaultLoading, className, style, getJobHref, onJobSelect },
+  {
+    connector,
+    showDemoControls,
+    renderLoading = defaultLoading,
+    headingLevel,
+    colorScheme,
+    maxWidth = "42rem",
+    className,
+    style,
+    getJobHref,
+    onJobSelect,
+  },
   ref,
 ) {
   const tenant = useTenantConfig();
+  const resolvedColorScheme = useResolvedColorScheme(colorScheme);
   const [selectedScopeId, setSelectedScopeId] = useState("all");
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("since_midnight");
   const [reachabilityOverrides, setReachabilityOverrides] = useState<Record<string, boolean>>({});
@@ -74,8 +111,12 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
   return (
     <div
       ref={ref}
-      style={style}
-      className={cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className)}
+      style={{ maxWidth, ...style }}
+      className={cx(
+        "schedio-embed-root mx-auto w-full px-4 py-8 sm:px-6 sm:py-12",
+        colorSchemeClassName(resolvedColorScheme),
+        className,
+      )}
     >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="overflow-x-auto">
@@ -93,12 +134,13 @@ export const GlanceView = forwardRef<HTMLDivElement, GlanceViewProps>(function G
             headlineByScope={headlineByScope}
             selectedScopeId={selectedScopeId}
             onSelect={setSelectedScopeId}
+            colorSchemeClassName={colorSchemeClassName(resolvedColorScheme)}
           />
 
           {view && (
             <>
               <div className="mt-6">
-                <HeadlineBanner view={view} />
+                <HeadlineBanner view={view} headingLevel={headingLevel} />
               </div>
 
               <ExceptionList

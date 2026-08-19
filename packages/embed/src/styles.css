@@ -1,11 +1,23 @@
 @import "tailwindcss" source("./");
 @import "@xyflow/react/dist/style.css";
 
+/*
+ * `dark:` is class-based, not Tailwind v4's default `prefers-color-scheme`
+ * media strategy — a host's own light/dark toggle (next-themes and
+ * friends all work by setting a class) would otherwise have no way to
+ * control this package at all; the OS preference could only ever be
+ * followed, never overridden. GlanceView/JobDetail/PipelineGraphView
+ * resolve "system" vs. an explicit `colorScheme` prop once in JS (see
+ * `components/glance/colorScheme.ts`) and apply exactly one of
+ * `.schedio-dark`/`.schedio-light` themselves — see CLAUDE.md's
+ * "Embeddability" section for the reasoning and how a portaled popover
+ * has to redo this too.
+ */
+@custom-variant dark (&:where(.schedio-dark, .schedio-dark *));
+
 :root {
   --schedio-graph-dot: #e4e4e7;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --schedio-graph-dot: #27272a;
-  }
+.schedio-dark {
+  --schedio-graph-dot: #27272a;
 }

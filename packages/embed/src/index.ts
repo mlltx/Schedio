@@ -19,6 +19,8 @@
 export { GlanceView, type GlanceViewProps } from "./components/glance/GlanceView";
 export { JobDetail, type JobDetailProps } from "./components/glance/JobDetail";
 export type { JobNavigation } from "./components/glance/navigation";
+export type { HeadingLevel } from "./components/glance/Heading";
+export type { ColorScheme } from "./components/glance/colorScheme";
 
 // The job detail page embeds a compact dependency neighborhood inline;
 // PipelineGraphView is its "view full pipeline" destination — a full-page

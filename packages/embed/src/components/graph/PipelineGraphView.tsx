@@ -1,6 +1,7 @@
 "use client";
 
-import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Search, Waypoints } from "lucide-react";
 import {
   getDependencyGraph,
@@ -16,6 +17,9 @@ import { usePromise } from "../glance/usePromise";
 import { cx } from "../glance/cx";
 import { BackLink } from "../glance/BackLink";
 import type { JobNavigation } from "../glance/navigation";
+import { Heading, type HeadingLevel } from "../glance/Heading";
+import { computePopoverPosition, type PopoverPosition } from "../glance/popoverPosition";
+import { useResolvedColorScheme, colorSchemeClassName, type ColorScheme } from "../glance/colorScheme";
 import { DependencyGraphCanvas } from "./DependencyGraphCanvas";
 
 /**
@@ -48,6 +52,19 @@ export interface PipelineGraphViewProps extends JobNavigation {
   renderLoading?: () => ReactNode;
   /** Replaces the default "pipeline could not be found" message. */
   renderNotFound?: () => ReactNode;
+  /**
+   * Heading level for "Full pipeline" — the most prominent text in this
+   * view. Defaults to `1`; set it to match wherever this sits in the host
+   * page's own document outline (e.g. `2` if the host's page already has
+   * its own `<h1>`).
+   */
+  headingLevel?: HeadingLevel;
+  /**
+   * `"system"` (the default) follows the OS/browser preference. Set to
+   * `"light"`/`"dark"` to defer to a host's own theme toggle instead —
+   * see `components/glance/colorScheme.ts`.
+   */
+  colorScheme?: ColorScheme;
   /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
   className?: string;
   style?: CSSProperties;
@@ -63,11 +80,25 @@ function contextIdsAround(graph: DependencyGraph, centerIds: Set<string>): Set<s
 }
 
 export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewProps>(function PipelineGraphView(
-  { jobId, connector, backHref, onBack, renderLoading = defaultLoading, renderNotFound, className, style, getJobHref, onJobSelect },
+  {
+    jobId,
+    connector,
+    backHref,
+    onBack,
+    renderLoading = defaultLoading,
+    renderNotFound,
+    headingLevel,
+    colorScheme,
+    className,
+    style,
+    getJobHref,
+    onJobSelect,
+  },
   ref,
 ) {
   const tenant = useTenantConfig();
   const terms = tenant.terminology;
+  const resolvedColorScheme = useResolvedColorScheme(colorScheme);
 
   // Known tradeoff, not yet solved: a poll tick that changes nothing
   // meaningful still produces a fresh `graph` object, and
@@ -118,7 +149,45 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
     return graph.nodes.filter((n) => n.jobName.toLowerCase().includes(q)).slice(0, 8);
   }, [graph, searchTerm]);
 
-  const rootClassName = cx("schedio-embed-root flex h-full w-full flex-col px-4 py-6 sm:px-6 sm:py-8", className);
+  // Same fix, same reason, as ScopeSwitcher's team picker: `absolute`
+  // positioning here could be clipped by a host ancestor's
+  // `overflow: hidden`, so this portals to document.body and positions
+  // itself from the search input's own viewport rect instead. See
+  // computePopoverPosition's own docs for the flip/measurement details.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const matchesPanelRef = useRef<HTMLDivElement>(null);
+  const [matchesPosition, setMatchesPosition] = useState<PopoverPosition | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const showMatches = matches.length > 0;
+
+  useEffect(() => setMounted(true), []);
+
+  useLayoutEffect(() => {
+    if (!showMatches) {
+      setMatchesPosition(null);
+      return;
+    }
+    setMatchesPosition(computePopoverPosition(searchInputRef.current, null, 224, 200));
+  }, [showMatches]);
+
+  useEffect(() => {
+    if (!showMatches) return;
+    const recompute = () => setMatchesPosition(computePopoverPosition(searchInputRef.current, matchesPanelRef.current, 224, 200));
+    const raf = requestAnimationFrame(recompute);
+    window.addEventListener("resize", recompute);
+    document.addEventListener("scroll", recompute, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", recompute);
+      document.removeEventListener("scroll", recompute, true);
+    };
+  }, [showMatches]);
+
+  const rootClassName = cx(
+    "schedio-embed-root flex h-full w-full flex-col px-4 py-6 sm:px-6 sm:py-8",
+    colorSchemeClassName(resolvedColorScheme),
+    className,
+  );
 
   if (graph === undefined) {
     return (
@@ -131,7 +200,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
   if (graph === null) {
     return (
       <div ref={ref} style={style} className={rootClassName}>
-        <BackLink backHref={backHref} onBack={onBack} label="Back to job" className="mb-4" />
+        <BackLink backHref={backHref} onBack={onBack} label={tenant.copy.backToJob} className="mb-4" />
         {(renderNotFound ?? (() => defaultNotFound(terms)))()}
       </div>
     );
@@ -141,23 +210,24 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
 
   return (
     <div ref={ref} style={style} className={rootClassName}>
-      <BackLink backHref={backHref} onBack={onBack} label="Back to job" className="mb-4" />
+      <BackLink backHref={backHref} onBack={onBack} label={tenant.copy.backToJob} className="mb-4" />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Waypoints className="h-5 w-5 text-zinc-400 dark:text-zinc-500" aria-hidden />
-          <h1 className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-zinc-50">
-            Full pipeline
+          <Heading level={headingLevel} className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-zinc-50">
+            {tenant.copy.fullPipelineHeading}
             <span className="ml-2 font-normal text-zinc-400 dark:text-zinc-500">
               {graph.nodes.length} {graph.nodes.length === 1 ? terms.job : terms.jobs}
             </span>
-          </h1>
+          </Heading>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" aria-hidden />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchTerm}
               onChange={(e) => {
@@ -167,22 +237,36 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
               placeholder={`Find a ${terms.job}...`}
               className="w-44 rounded-lg border border-zinc-200 bg-white py-1.5 pr-2.5 pl-8 text-xs text-zinc-800 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none sm:w-56 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
-            {matches.length > 0 && (
-              <div className="absolute top-full z-10 mt-1 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                {matches.map((m) => (
-                  <button
-                    key={m.jobId}
-                    onClick={() => {
-                      setSearchFocusId(m.jobId);
-                      setSearchTerm(m.jobName);
-                    }}
-                    className="block w-full truncate px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    {m.jobName}
-                  </button>
-                ))}
-              </div>
-            )}
+            {mounted &&
+              showMatches &&
+              createPortal(
+                <div
+                  ref={matchesPanelRef}
+                  // Same reapplication as ScopeSwitcher's popover, same
+                  // reason: a portal escapes both the scoped stylesheet's
+                  // `.schedio-embed-root` ancestor requirement and any CSS
+                  // custom property inheritance from it.
+                  className={cx(
+                    "schedio-embed-root fixed z-50 w-56 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900",
+                    colorSchemeClassName(resolvedColorScheme),
+                  )}
+                  style={{ top: matchesPosition?.top ?? -9999, left: matchesPosition?.left ?? -9999 }}
+                >
+                  {matches.map((m) => (
+                    <button
+                      key={m.jobId}
+                      onClick={() => {
+                        setSearchFocusId(m.jobId);
+                        setSearchTerm(m.jobName);
+                      }}
+                      className="block w-full truncate px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      {m.jobName}
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              )}
           </div>
 
           {problemIds.size > 0 && (
@@ -195,7 +279,9 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
                   : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900",
               )}
             >
-              {hideHealthy ? `Focused on issues${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ""}` : "Focus on issues"}
+              {hideHealthy
+                ? `${tenant.copy.focusedOnIssuesLabel}${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ""}`
+                : tenant.copy.focusOnIssuesLabel}
             </button>
           )}
 
@@ -204,7 +290,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
               onClick={() => setShowAll((v) => !v)}
               className="rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
-              {showAll ? "Fit to issues" : "Fit to full pipeline"}
+              {showAll ? tenant.copy.fitToIssuesLabel : tenant.copy.fitToFullPipelineLabel}
             </button>
           )}
         </div>

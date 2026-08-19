@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { forwardRef, useEffect, useMemo, type CSSProperties } from "react";
 import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, type NodeTypes } from "@xyflow/react";
 // React Flow's base styles are pulled in via src/styles.css -> dist/style.css
 // (already scoped under .schedio-embed-root by build-css.mjs) — importing
@@ -8,7 +8,9 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, type 
 import type { DependencyGraph } from "@/model";
 import { GraphJobNode } from "./GraphJobNode";
 import { applyGraphOverlay, computeGraphLayout } from "./layout";
+import { cx } from "../glance/cx";
 import type { JobNavigation } from "../glance/navigation";
+import { useResolvedColorScheme, colorSchemeClassName, type ColorScheme } from "../glance/colorScheme";
 
 const nodeTypes: NodeTypes = { job: GraphJobNode };
 
@@ -21,6 +23,17 @@ export interface DependencyGraphCanvasProps extends JobNavigation {
   /** Node ids to fit the initial viewport to. Defaults to every node. */
   focusIds?: Set<string>;
   height?: number | string;
+  /**
+   * `"system"` (the default) follows the OS/browser preference. Only
+   * relevant when this is rendered standalone, outside GlanceView/
+   * JobDetail/PipelineGraphView — nested inside one of those, it inherits
+   * their resolved scheme via the ancestor `.schedio-dark`/`.schedio-light`
+   * class already. See `components/glance/colorScheme.ts`.
+   */
+  colorScheme?: ColorScheme;
+  /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
+  className?: string;
+  style?: CSSProperties;
 }
 
 function CanvasInner({
@@ -78,15 +91,25 @@ function CanvasInner({
   );
 }
 
-export function DependencyGraphCanvas(props: DependencyGraphCanvasProps) {
+export const DependencyGraphCanvas = forwardRef<HTMLDivElement, DependencyGraphCanvasProps>(function DependencyGraphCanvas(
+  props,
+  ref,
+) {
+  const { className, style, colorScheme } = props;
+  const resolvedColorScheme = useResolvedColorScheme(colorScheme);
   return (
     <div
-      style={{ height: props.height ?? (props.variant === "compact" ? 240 : "100%") }}
-      className="w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
+      ref={ref}
+      style={{ height: props.height ?? (props.variant === "compact" ? 240 : "100%"), ...style }}
+      className={cx(
+        "schedio-embed-root w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800",
+        colorSchemeClassName(resolvedColorScheme),
+        className,
+      )}
     >
       <ReactFlowProvider>
         <CanvasInner {...props} />
       </ReactFlowProvider>
     </div>
   );
-}
+});

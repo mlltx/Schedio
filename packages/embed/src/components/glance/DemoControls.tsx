@@ -39,7 +39,7 @@ export function DemoControls({
                     type="checkbox"
                     checked={!reachable}
                     onChange={(e) => onToggle(scope.id, !e.target.checked)}
-                    style={{ accentColor: "var(--brand-primary)" }}
+                    style={{ accentColor: "var(--schedio-brand-primary, #18181b)" }}
                     className="h-4 w-4"
                     aria-label={`Simulate outage for ${scope.name}`}
                   />

@@ -33,6 +33,44 @@ export type { Terminology };
 export interface TenantCopy {
   /** Heading above the exception list, e.g. "Needs a look". */
   exceptionsHeading: string;
+  /** `JobDetail`'s link back to the glance view, e.g. "Back to glance". */
+  backToGlance: string;
+  /** `PipelineGraphView`'s link back to the job it was opened from, e.g. "Back to job". */
+  backToJob: string;
+  /**
+   * Plural form of what to call a scope grouping in `ScopeSwitcher`'s
+   * picker trigger, e.g. "Teams" (shown as "Teams (8)"). Not part of
+   * `Terminology` — that's the model's own vocabulary for job/run;
+   * "team" is purely a UI label for how scopes are presented.
+   */
+  scopesLabel: string;
+  /** Singular form, e.g. "team" — used in "Find a team..." and "No teams match". */
+  scopeLabel: string;
+  /** `JobDetail`'s inline dependency graph heading, e.g. "Dependency graph". */
+  dependencyGraphHeading: string;
+  /** Link from `JobDetail`'s inline graph to the full `PipelineGraphView`, e.g. "View full pipeline". */
+  viewFullPipeline: string;
+  /** `JobDetail`'s expected-duration stat label, e.g. "Usually takes". */
+  usuallyTakesLabel: string;
+  /** `JobDetail`'s historical failure-rate stat label, e.g. "Historical failure rate". */
+  historicalFailureRateLabel: string;
+  /** `JobDetail`'s "is today typical" stat label, e.g. "Today". */
+  todayLabel: string;
+  /** Values for the "Today" stat, e.g. "Typical" / "Unusual". */
+  typicalLabel: string;
+  unusualLabel: string;
+  /** Fallback for "Open in {sourceLabel}" when a job has a `sourceUrl` but no `sourceLabel`, e.g. "source". */
+  genericSourceLabel: string;
+  /** `PipelineGraphView`'s own heading, e.g. "Full pipeline". */
+  fullPipelineHeading: string;
+  /** `PipelineGraphView`'s issue-filter toggle, e.g. "Focus on issues" / "Focused on issues". */
+  focusOnIssuesLabel: string;
+  focusedOnIssuesLabel: string;
+  /** `PipelineGraphView`'s zoom-extent toggle, e.g. "Fit to full pipeline" / "Fit to issues". */
+  fitToFullPipelineLabel: string;
+  fitToIssuesLabel: string;
+  /** `ScopeSwitcher`'s empty search-result state, shown as `{noScopesMatchLabel} "{query}"`, e.g. "No teams match". */
+  noScopesMatchLabel: string;
 }
 
 export interface TenantConfig {

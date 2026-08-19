@@ -27,7 +27,7 @@ export function SourceStatusStrip({ sources }: { sources: SourceStatus[] }) {
           >
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${visual.dot}`} aria-hidden />
             {source.id}
-            {!source.reachable && <span className={visual.text}>· Unreachable</span>}
+            {!source.reachable && <span className={visual.text}>· {source.statusCopy}</span>}
           </span>
         );
       })}

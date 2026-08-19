@@ -354,12 +354,108 @@ Tailwind output with `postcss-prefix-selector` so every rule (including
 `@schedio/embed/style.css` once; it can't leak onto their page, and their
 page's styles can't leak in either.
 
+**`postcss-prefix-selector`'s `transform` must match both "descendant of
+the root" and "the root itself" — a plain `${prefix} ${selector}` only
+matches the first.** Every top-level component's own root div carries
+`schedio-embed-root` *and* its own layout classes (`mx-auto max-w-2xl
+px-4 py-8 ...`) on the *same* element, and a portaled popover (see below)
+does too — a bare descendant combinator never matches a utility class
+applied to the element that itself carries `schedio-embed-root`, only to
+a genuine descendant of it. This was broken from the start and stayed
+invisible for a long time: it only ever "worked" in `web/`'s own dev
+environment because `web/` has its own separate, unscoped Tailwind build
+that happens to also generate unprefixed copies of the exact same utility
+classes, silently papering over the gap. It does not work for a real
+third-party host with no such accidental duplicate. Caught by testing a
+new portaled popover against a *standalone* HTML file that imports only
+`@schedio/embed/style.css` — nothing else — which is the only way this
+class of bug shows up at all; testing exclusively inside `web/` cannot
+catch it. The fix: emit `:is(${prefix} ${selector}, ${prefix}${selector})`
+instead, matching either shape. If you touch `build-css.mjs`'s transform
+again, re-verify against a standalone HTML file, not just `web/`.
+
+**Any popover renders via `createPortal` to `document.body`, not
+`absolute` positioning in place.** `ScopeSwitcher`'s team picker and
+`PipelineGraphView`'s search-match dropdown both do this — an `absolute`
+popover nested in the host's own layout can be clipped by any ancestor's
+`overflow: hidden`, which a host embedding this component is under no
+obligation to avoid. `components/glance/popoverPosition.ts`'s
+`computePopoverPosition` is the shared positioning logic (`position:
+fixed`, computed from the trigger's `getBoundingClientRect()`, flips
+above/left when it wouldn't fit below/right, re-measured on scroll/resize
+while open). Three things a portaled popover has to redo that a normally-
+nested one gets for free: reapply the `schedio-embed-root` class on the
+portaled node itself (a portal escapes the CSS scoping ancestor
+entirely), reapply any brand CSS custom properties it reads directly from
+`useTenantConfig()` rather than trusting them to still be inherited
+(custom properties don't cross a portal boundary either), and compute an
+initial position *synchronously before* the popover ever renders (in the
+same state update that opens it) rather than gating it behind a
+`visibility: hidden` placeholder until measured — a hidden element can't
+receive focus, which broke auto-focusing the search input on open the
+first time this was built.
+
 Both components also carry the standard React component-library escape
 hatches (`forwardRef`, `className`/`style` merged onto the root,
 `renderLoading`/`renderNotFound` overrides) — see `packages/embed/README.md`
 for the full props reference. Keep these in sync if you add new top-level
 components: a component meant to be embedded that can't be ref'd, styled,
 or have its loading state overridden doesn't fit the pattern.
+
+**`className` can't reliably override the root's width, so `GlanceView`/
+`JobDetail` also take a `maxWidth` prop (`"42rem"` by default, matching the
+old fixed `max-w-2xl`).** A host passing `className="max-w-4xl"` and this
+component's own default both compile to a plain Tailwind utility class —
+identical specificity — so which one wins depends on which rule happens to
+appear later in the merged stylesheet, an accident of build order a host
+has no way to control or rely on. `maxWidth` sidesteps the fight entirely
+by applying via inline `style` (`{ maxWidth, ...style }`), which always
+beats a class regardless of source order. `className`/`style` remain for
+what they're actually good at — additive one-off tweaks (a margin, a
+shadow) — not structural layout properties where a silent specificity tie
+would be surprising. `PipelineGraphView` has no `maxWidth` — it fills its
+container by design rather than capping its own width, so there's nothing
+to override.
+
+**Dark mode is a `colorScheme` prop (`"system" | "light" | "dark"`,
+defaulting to `"system"`), not `prefers-color-scheme` alone.** A host with
+its own light/dark toggle (`next-themes` and friends all work by setting a
+class, not by controlling the OS preference) would otherwise have no way
+to reach this component at all. `styles.css` makes Tailwind's `dark:`
+variant class-based instead of Tailwind v4's default media-query strategy
+(`@custom-variant dark (&:where(.schedio-dark, .schedio-dark *));`);
+`components/glance/colorScheme.ts`'s `useResolvedColorScheme` resolves
+`"system"` vs. an explicit override to a concrete `"light" | "dark"` once
+in JS (reading `matchMedia`, with a live `change` listener), and
+`colorSchemeClassName` maps that to the `.schedio-dark`/`.schedio-light`
+class each of `GlanceView`/`JobDetail`/`PipelineGraphView`/
+`DependencyGraphCanvas` applies to its own root — same idea as the brand
+CSS vars above, and subject to the same portal gotcha: `ScopeSwitcher`'s
+team picker and `PipelineGraphView`'s search-match dropdown both reapply
+the resolved class on their portaled node explicitly, since a portal
+escapes the normal ancestor-class inheritance a nested node would get for
+free.
+
+**`systemDark`'s `useState` deliberately starts `false` and never reads
+`matchMedia` synchronously in its initializer, even though `window` is
+already available by the time a client component's first render runs.**
+This was a real, empirically-caught bug: SSR always renders `"light"` (no
+`window` to read at all), and if the client's first hydration render
+computed the true answer immediately, that first paint would already carry
+the correct class — but Next only *reports* a hydration mismatch on an
+attribute like this, it doesn't correct it ("This won't be patched up," in
+its own words). The `useEffect` that's supposed to fix it up would then be
+calling `setSystemDark` with a value that already matches state, which
+React treats as a no-op and never re-renders for — so the wrong class
+would stick forever, silently, with nothing but a console warning to catch
+it. Starting `false` guarantees the first client render matches SSR
+exactly (nothing to mismatch), so the effect's update is a genuine state
+transition afterward that actually re-renders. Caught via a
+`MutationObserver` watching the root's `class` attribute in a real browser
+with `page.emulateMedia`/`colorScheme` — logging just the final class
+would have missed it, since the *first* observed value being wrong and
+*staying* wrong for the mismatch reason above looks identical, from a
+single snapshot, to it simply never having been computed at all.
 
 `GlanceView` doesn't render a product-name header, on purpose — a host
 embedding it already has their own page chrome (nav, logo, whatever), and
@@ -429,6 +525,34 @@ pipelines") — the model owns the vocabulary its own copy is built from.
 `config/types.ts` imports `Terminology` from `@/model`; the model never
 imports from `config/`.
 
+**`TenantCopy` (`config/types.ts`) is where UI-chrome strings live that
+aren't part of `Terminology`** — "Back to glance", "Full pipeline",
+"Focus on issues", the "Teams" scope-picker label, and similar. The split
+mirrors the one above: `Terminology` is the model's own vocabulary
+(job/run), because `compute.ts`'s generated sentences are built from it;
+`TenantCopy` is everything else a component renders verbatim that would
+otherwise be a hardcoded string bypassing config entirely — MISSION.md's
+"if adding a feature means a new hardcoded string in a component, ask
+whether it belongs in config instead," applied literally. Deliberately
+**not** moved into `TenantCopy`: severity labels (`SEVERITY_LABEL` in
+`visuals.ts`) and run-status labels (`RUN_STATUS_LABEL` in `JobDetail.tsx`)
+— these are fixed vocabulary paired with the fixed severity colors
+(`visuals.ts`'s `SEVERITY_VISUAL`), and MISSION.md's guardrail that
+severity colors aren't themeable applies for the same reason to their
+labels: comprehension depends on "Critical" meaning the same thing
+everywhere, the same way red does. `config/presets.ts`'s two example
+tenants each get their own distinct `TenantCopy` (not just their own
+`Terminology`) precisely so switching between them live proves this
+boundary holds for chrome strings too, not only for job/run vocabulary —
+same "prove it live" pattern as everything else in that file.
+`SourceStatusStrip`'s inline "Unreachable" label was a related but
+different bug, not a `TenantCopy` gap: `source.statusCopy` was already
+computed in `model/index.ts` for exactly this (currently a tooltip via
+`title`), so the fix was reusing that computed value inline instead of a
+second, independently-hardcoded literal — the same "copy generation lives
+in exactly one place" principle `compute.ts` follows, not a new config
+surface.
+
 `TenantConfigProvider` takes a single `config` prop and has **no internal
 tenant-switching state** — a host has exactly one brand, so to "switch
 tenant" they just re-render with a different `config` object. Picking
@@ -440,9 +564,14 @@ coupling, so it's `web/`'s `TenantSwitcherBar.tsx` that wires it to
 `AppTenantProvider`'s state — the package component itself doesn't render
 a switcher and shouldn't.
 
-Brand color flows through as CSS custom properties (`--brand-primary`,
-`--brand-primary-foreground`) rather than Tailwind classes, since the
-value is runtime data. Severity colors (healthy/critical/etc., defined in
+Brand color flows through as CSS custom properties (`--schedio-brand-primary`,
+`--schedio-brand-primary-foreground`) rather than Tailwind classes, since
+the value is runtime data — namespaced with a `schedio-` prefix so a host
+already using the unprefixed name for their own theming can't collide with
+it either direction, and every `var()` consumer carries a literal fallback
+matching `DEFAULT_TENANT_CONFIG`'s colors, so the brand pill renders
+correctly even for a host that skips `TenantConfigProvider` entirely, not
+just inertly. Severity colors (healthy/critical/etc., defined in
 `components/glance/visuals.ts`) are deliberately **not** themeable per
 tenant — a guardrail from `MISSION.md`, not an oversight.
 

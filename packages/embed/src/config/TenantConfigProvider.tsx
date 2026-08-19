@@ -25,17 +25,25 @@ export function TenantConfigProvider({
   const style = useMemo(
     () =>
       ({
-        "--brand-primary": config.brand.colors.primary,
-        "--brand-primary-foreground": config.brand.colors.primaryForeground,
+        // Namespaced (not just "--brand-primary") so a host already using
+        // that name for their own theming doesn't silently leak into ours,
+        // or vice versa.
+        "--schedio-brand-primary": config.brand.colors.primary,
+        "--schedio-brand-primary-foreground": config.brand.colors.primaryForeground,
+        // Inline, not a Tailwind `contents` class: this div sits *outside*
+        // .schedio-embed-root (it wraps whatever renders it, GlanceView
+        // included), so a class scoped to apply only inside that wrapper
+        // would never match here — it only ever worked in web/'s own demo
+        // because that app happens to run its own separate, unscoped
+        // Tailwind build too.
+        display: "contents",
       }) as CSSProperties,
     [config.brand.colors.primary, config.brand.colors.primaryForeground],
   );
 
   return (
     <TenantConfigContext.Provider value={config}>
-      <div style={style} className="contents">
-        {children}
-      </div>
+      <div style={style}>{children}</div>
     </TenantConfigContext.Provider>
   );
 }

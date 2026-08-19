@@ -12,6 +12,8 @@ import { BackLink } from "./BackLink";
 import { formatShortDateTime } from "./format";
 import { DependencyGraphCanvas } from "../graph/DependencyGraphCanvas";
 import type { JobNavigation } from "./navigation";
+import { Heading, type HeadingLevel } from "./Heading";
+import { useResolvedColorScheme, colorSchemeClassName, type ColorScheme } from "./colorScheme";
 
 const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   success: "Succeeded",
@@ -55,7 +57,28 @@ export interface JobDetailProps extends JobNavigation {
   renderLoading?: () => ReactNode;
   /** Replaces the default "This job could not be found" message. Still rendered below the back link. */
   renderNotFound?: () => ReactNode;
-  /** Merged onto the root element — the standard escape hatch for one-off layout nudges. */
+  /**
+   * Heading level for the job name — the most prominent text in this
+   * view. Defaults to `1`; set it to match wherever this sits in the host
+   * page's own document outline (e.g. `2` if the host's page already has
+   * its own `<h1>`).
+   */
+  headingLevel?: HeadingLevel;
+  /**
+   * `"system"` (the default) follows the OS/browser preference. Set to
+   * `"light"`/`"dark"` to defer to a host's own theme toggle instead —
+   * see `components/glance/colorScheme.ts`.
+   */
+  colorScheme?: ColorScheme;
+  /**
+   * Caps the root element's width, same value shape as CSS `max-width`
+   * (`"56rem"`, `"100%"`, `640`, ...). Defaults to `"42rem"`. Applied as an
+   * inline style rather than a Tailwind class specifically so it's
+   * guaranteed to win — see `GlanceViewProps.maxWidth` for why `className`
+   * can't reliably do this.
+   */
+  maxWidth?: string | number;
+  /** Merged onto the root element — the standard escape hatch for one-off layout nudges; not for structural overrides like width (see `maxWidth`). */
   className?: string;
   style?: CSSProperties;
 }
@@ -72,12 +95,16 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
     onJobSelect,
     renderLoading = defaultLoading,
     renderNotFound,
+    headingLevel,
+    colorScheme,
+    maxWidth = "42rem",
     className,
     style,
   },
   ref,
 ) {
   const tenant = useTenantConfig();
+  const resolvedColorScheme = useResolvedColorScheme(colorScheme);
   const job = usePromise(
     async () => {
       const result = await getJobDetail(jobId, { terms: tenant.terminology, connector });
@@ -87,11 +114,16 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
     resolvePollIntervalMs(connector ?? mockConnector),
   );
 
-  const rootClassName = cx("schedio-embed-root mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12", className);
+  const rootClassName = cx(
+    "schedio-embed-root mx-auto w-full px-4 py-8 sm:px-6 sm:py-12",
+    colorSchemeClassName(resolvedColorScheme),
+    className,
+  );
+  const rootStyle: CSSProperties = { maxWidth, ...style };
 
   if (job === undefined) {
     return (
-      <div ref={ref} style={style} className={rootClassName}>
+      <div ref={ref} style={rootStyle} className={rootClassName}>
         {renderLoading()}
       </div>
     );
@@ -99,8 +131,8 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
 
   if (job === null) {
     return (
-      <div ref={ref} style={style} className={rootClassName}>
-        <BackLink backHref={backHref} onBack={onBack} label="Back to glance" className="mb-6" />
+      <div ref={ref} style={rootStyle} className={rootClassName}>
+        <BackLink backHref={backHref} onBack={onBack} label={tenant.copy.backToGlance} className="mb-6" />
         {(renderNotFound ?? (() => defaultNotFound(tenant.terminology)))()}
       </div>
     );
@@ -110,8 +142,8 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
   const visual = SEVERITY_VISUAL[job.severity];
 
   return (
-    <div ref={ref} style={style} className={rootClassName}>
-      <BackLink backHref={backHref} onBack={onBack} label="Back to glance" className="mb-6" />
+    <div ref={ref} style={rootStyle} className={rootClassName}>
+      <BackLink backHref={backHref} onBack={onBack} label={tenant.copy.backToGlance} className="mb-6" />
 
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -119,9 +151,9 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
             {job.scopeName}
             {job.owner !== job.scopeName ? ` · ${job.owner}` : ""}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl dark:text-zinc-50">
+          <Heading level={headingLevel} className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl dark:text-zinc-50">
             {job.jobName}
-          </h1>
+          </Heading>
           {job.sourceUrl && (
             <a
               href={job.sourceUrl}
@@ -130,7 +162,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
               className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               <ExternalLink className="h-3 w-3" aria-hidden />
-              Open in {job.sourceLabel ?? "source"}
+              Open in {job.sourceLabel ?? tenant.copy.genericSourceLabel}
             </a>
           )}
         </div>
@@ -152,17 +184,17 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
           <dd className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{job.cadenceLabel}</dd>
         </div>
         <div>
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Usually takes</dt>
+          <dt className="text-xs text-zinc-500 dark:text-zinc-400">{tenant.copy.usuallyTakesLabel}</dt>
           <dd className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{job.expectedDurationLabel}</dd>
         </div>
         <div>
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Historical failure rate</dt>
+          <dt className="text-xs text-zinc-500 dark:text-zinc-400">{tenant.copy.historicalFailureRateLabel}</dt>
           <dd className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{job.baseline.failureRatePercent}%</dd>
         </div>
         <div>
-          <dt className="text-xs text-zinc-500 dark:text-zinc-400">Today</dt>
+          <dt className="text-xs text-zinc-500 dark:text-zinc-400">{tenant.copy.todayLabel}</dt>
           <dd className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {job.baseline.isTypicalToday ? "Typical" : "Unusual"}
+            {job.baseline.isTypicalToday ? tenant.copy.typicalLabel : tenant.copy.unusualLabel}
           </dd>
         </div>
       </dl>
@@ -171,7 +203,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
         <div className="mt-8">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <h2 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400">
-              Dependency graph
+              {tenant.copy.dependencyGraphHeading}
             </h2>
             {job.dependencyGraph.truncated && (getPipelineHref || onViewPipeline) && (
               <NavLink
@@ -180,7 +212,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
                 className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
                 <Waypoints className="h-3.5 w-3.5" aria-hidden />
-                View full pipeline
+                {tenant.copy.viewFullPipeline}
               </NavLink>
             )}
           </div>
@@ -219,11 +251,6 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
           </div>
         )}
       </div>
-
-      <p className="mt-10 text-xs text-zinc-400 dark:text-zinc-600">
-        Logs and configuration would live behind a &ldquo;technical details&rdquo; disclosure here in a full
-        build — this stub covers what a non-engineer needs to answer &ldquo;why did this happen?&rdquo;
-      </p>
     </div>
   );
 });

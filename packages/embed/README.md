@@ -403,7 +403,10 @@ pipeline, `1` for just the immediate neighbors.
 | `getJobHref` | `(jobId) => string` | — | real `href` for exception rows |
 | `onJobSelect` | `(jobId) => void` | — | client-side routing callback |
 | `renderLoading` | `() => ReactNode` | built-in skeleton | shown while the first fetch is in flight |
-| `className`, `style` | — | — | merged onto the root element |
+| `headingLevel` | `1\|2\|3\|4\|5\|6` | `1` | heading level for the banner headline — match your page's outline |
+| `colorScheme` | `"system"\|"light"\|"dark"` | `"system"` | `"light"`/`"dark"` overrides the OS preference — for a host with its own toggle |
+| `maxWidth` | `string \| number` | `"42rem"` | caps the root's width; use this, not `className`, for width overrides (see below) |
+| `className`, `style` | — | — | merged onto the root element — additive tweaks only, not structural overrides like width |
 | `ref` | `Ref<HTMLDivElement>` | — | forwarded to the root element |
 
 **`JobDetail`**
@@ -420,7 +423,10 @@ pipeline, `1` for just the immediate neighbors.
 | `onViewPipeline` | `(jobId) => void` | — | client-side routing callback for "View full pipeline" |
 | `renderLoading` | `() => ReactNode` | built-in skeleton | |
 | `renderNotFound` | `() => ReactNode` | built-in message | shown (below the back link) when `jobId` doesn't resolve |
-| `className`, `style` | — | — | merged onto the root element |
+| `headingLevel` | `1\|2\|3\|4\|5\|6` | `1` | heading level for the job name |
+| `colorScheme` | `"system"\|"light"\|"dark"` | `"system"` | see `GlanceView` above |
+| `maxWidth` | `string \| number` | `"42rem"` | see `GlanceView` above |
+| `className`, `style` | — | — | merged onto the root element — additive tweaks only, not structural overrides like width |
 | `ref` | `Ref<HTMLDivElement>` | — | forwarded to the root element |
 
 **`PipelineGraphView`**
@@ -435,8 +441,14 @@ pipeline, `1` for just the immediate neighbors.
 | `onJobSelect` | `(jobId) => void` | — | client-side routing callback for a node |
 | `renderLoading` | `() => ReactNode` | built-in skeleton | |
 | `renderNotFound` | `() => ReactNode` | built-in message | |
+| `headingLevel` | `1\|2\|3\|4\|5\|6` | `1` | heading level for "Full pipeline" |
+| `colorScheme` | `"system"\|"light"\|"dark"` | `"system"` | see `GlanceView` above |
 | `className`, `style` | — | — | merged onto the root element |
 | `ref` | `Ref<HTMLDivElement>` | — | forwarded to the root element |
+
+No `maxWidth` here — unlike `GlanceView`/`JobDetail`, this component fills
+its container rather than capping its own width; size it via the
+container you mount it in.
 
 Every `getXHref`/`onXSelect` pair above is composable the same way
 `next/link` works internally: give a real href for accessibility/

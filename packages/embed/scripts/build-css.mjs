@@ -24,7 +24,7 @@ const result = await postcss([
   tailwindcss(),
   prefixSelector({
     prefix: ".schedio-embed-root",
-    transform(prefix, selector, prefixedSelector) {
+    transform(prefix, selector) {
       // Rules that already target :root / html / body (Tailwind's base
       // layer) would become inert nonsense if naively prefixed as a
       // descendant combinator — scope those to apply *to* our root
@@ -32,7 +32,16 @@ const result = await postcss([
       if (selector === ":root" || selector === "html" || selector === "body") {
         return prefix;
       }
-      return prefixedSelector;
+      // A plain descendant combinator (`${prefix} ${selector}`) only
+      // matches a utility class applied to a *descendant* of the root —
+      // it never matches the root element itself carrying that class on
+      // its own `className`, which every top-level component's own root
+      // div does (`schedio-embed-root mx-auto max-w-2xl ...`, all one
+      // element), and so does every portaled popover (`schedio-embed-root
+      // fixed z-50 ...`, reapplied since a portal escapes this ancestor
+      // entirely). `:is()` matches either shape without needing to know
+      // which one a given selector will end up used as.
+      return `:is(${prefix} ${selector}, ${prefix}${selector})`;
     },
   }),
 ]).process(css, { from: input, to: output });
