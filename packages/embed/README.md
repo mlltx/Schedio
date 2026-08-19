@@ -21,6 +21,11 @@ npm install github:mlltx/Schedio#workspace=packages/embed
 (If you're working inside this monorepo — e.g. `web/` — it's already
 wired up as an npm workspace dependency; see the repo root `CLAUDE.md`.)
 
+Want to copy this package's source into your own repo instead of
+depending on it as a package? See [`VENDORING.md`](../../VENDORING.md) at
+the repo root — this package was built to make that straightforward, but
+there's one easy-to-miss step (CSS scoping) worth reading first.
+
 ## Quick start
 
 ```tsx

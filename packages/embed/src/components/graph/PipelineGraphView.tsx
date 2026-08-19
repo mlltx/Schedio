@@ -11,8 +11,8 @@ import {
   type ConnectorFn,
   type DependencyGraph,
   type Terminology,
-} from "@/model";
-import { useTenantConfig } from "@/config/TenantConfigProvider";
+} from "../../model";
+import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { usePromise } from "../glance/usePromise";
 import { cx } from "../glance/cx";
 import { BackLink } from "../glance/BackLink";

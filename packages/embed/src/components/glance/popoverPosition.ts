@@ -1,3 +1,5 @@
+"use client";
+
 export interface PopoverPosition {
   top: number;
   left: number;

@@ -1,8 +1,8 @@
 "use client";
 
 import { forwardRef, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { getAllScopeStatuses, mockConnector, resolvePollIntervalMs, type ConnectorFn, type TimeWindow } from "@/model";
-import { useTenantConfig } from "@/config/TenantConfigProvider";
+import { getAllScopeStatuses, mockConnector, resolvePollIntervalMs, type ConnectorFn, type TimeWindow } from "../../model";
+import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { HeadlineBanner } from "./HeadlineBanner";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { TimeWindowPicker } from "./TimeWindowPicker";

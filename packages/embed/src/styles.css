@@ -1,3 +1,16 @@
+/*
+ * VENDORING THIS SOURCE? Read this first.
+ *
+ * This file must be compiled through THIS package's own build
+ * (`npm run build:css`, i.e. `scripts/build-css.mjs`), not through a
+ * host app's own Tailwind config pointed at these source files. That
+ * script's postcss-prefix-selector pass is what scopes every rule under
+ * `.schedio-embed-root` so this package's styles can't leak onto (or be
+ * leaked onto by) the host page — see CLAUDE.md's "Embeddability"
+ * section. Skipping it doesn't error; it just silently produces
+ * unscoped classes, which is a much worse failure mode. See
+ * VENDORING.md for the two supported ways to vendor this package.
+ */
 @import "tailwindcss" source("./");
 @import "@xyflow/react/dist/style.css";
 

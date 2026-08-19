@@ -29,6 +29,7 @@ re-derive status/severity logic in a component — that logic belongs in
 
 ```
 MISSION.md               — product mission and architectural principles (read first)
+VENDORING.md              — how to copy packages/embed or packages/connector-airflow source into your own repo
 package.json              — npm workspaces root ("packages/*", "web")
 packages/embed/            — @schedio/embed: the model + UI, published as a component
 packages/connector-airflow/ — @schedio/connector-airflow: maps an Airflow 3 instance into the model
@@ -106,10 +107,11 @@ packages/embed/src/model/
                 getJobDetail, getDependencyGraph, all async)
 ```
 
-`packages/embed/src/components/glance/` consumes only `@/model`'s computed
+`packages/embed/src/components/glance/` consumes only `model/`'s computed
 types and functions — never raw `Job`/`Run` data, never scheduler
-vocabulary. `@/*` inside the package resolves to `packages/embed/src/*`
-(its own tsconfig path alias — separate from `web/`'s).
+vocabulary. Imported via a relative path (`../../model`), not a path
+alias — see "Vendorable by construction" below for why `packages/embed/src`
+deliberately has no `@/*`-style alias of its own.
 
 ### The connector seam (real data, not just mock)
 
@@ -471,6 +473,72 @@ concrete version of "the hosted app is just the component with our own
 chrome... around it": literally the same JSX that used to live inside
 `packages/embed`, moved to the host layer where it belongs.
 
+### Vendorable by construction
+
+`packages/embed` and `packages/connector-airflow` are meant to work not
+just as npm-installed packages but as source a team copies into their own
+repo and builds themselves — see [`VENDORING.md`](../VENDORING.md) at the
+repo root for the walkthrough. That's a different (harder) constraint than
+embeddability above: embeddability is about runtime behavior inside a
+host's page; vendorability is about the *source* surviving being lifted
+out of this monorepo into a build system that knows nothing about it.
+Three standing conventions exist specifically for this, and regress
+silently if not maintained:
+
+- **No path aliases inside `packages/embed/src`.** Every internal import
+  is relative (`../../model`, `./cx`, ...) — this package's own
+  `tsconfig.json` used to declare a `@/*` → `./src/*` alias, and every
+  component imported through it. That's invisible/free for anyone
+  consuming the compiled `dist/` (esbuild resolves aliases away at build
+  time) or anyone who copies `tsconfig.json` alongside `src/`, but a
+  silent break for a team that vendors `src/` into a foreign bundler
+  without noticing the alias requirement — the import just fails to
+  resolve. Keep new internal imports relative; don't reintroduce the
+  alias for convenience.
+
+- **Client/server boundaries are literal per-file `"use client"`
+  directives, not just a build-time banner.** `tsup.config.ts` injects
+  `"use client"` as a banner on the compiled `dist/index.js` bundle
+  (`src/server.ts`'s entry deliberately gets none — see "Access control"
+  above for why that split exists at all), which is sufficient for anyone
+  consuming the published/compiled package. It does nothing for a team
+  vendoring `src/` straight into their own bundler, which analyzes RSC
+  boundaries per source file, not per compiled bundle — so every
+  component, hook, and provider file that uses browser APIs, hooks, or
+  context also carries its own `"use client"` as its literal first line.
+  (Confirmed harmless to have both: esbuild collapses multiple per-file
+  directives plus the banner down to exactly one `"use client"` at the
+  top of the compiled bundle — verified by grepping `dist/index.js` for
+  the literal string and getting a count of 1.) If you add a new file that
+  uses a hook, an event handler, or `window`/`document`, give it its own
+  `"use client"` line — don't rely on a parent's directive covering it.
+
+- **The CSS scoping step is a real, necessary build step, not an
+  artifact of this package's own bundler config that a host's Tailwind
+  build would reproduce for free.** `scripts/build-css.mjs`'s
+  postcss-prefix-selector pass (see "Embeddability" above for exactly why
+  a plain descendant combinator doesn't work) is what makes
+  `.schedio-embed-root` scoping happen — it's a deliberate, self-contained
+  script (reads only this package's own `src/styles.css`, writes only to
+  its own `dist/`, and every postcss dependency it needs is already a
+  `devDependency` of this package) *precisely so* it stays trivially
+  runnable from a vendored copy without needing anything from the
+  monorepo root. `src/styles.css` and the script itself both carry a
+  loud comment about this for exactly this reason: skipping the step, or
+  letting a host's own Tailwind config scan these files directly instead,
+  doesn't error — it just silently produces unscoped CSS, which is a much
+  worse failure mode than a build breaking outright.
+
+`packages/connector-airflow` has an easier version of the same constraint:
+its only reference to `@schedio/embed` is `import type` (erased at compile
+time, verified by `grep schedio/embed dist/index.js` turning up nothing —
+see that package's own README), it has zero runtime dependencies, and it
+never had a path alias to begin with. Keep it that way if you add another
+connector package: `import type` only against `@schedio/embed`, own
+`package.json`/`tsconfig.json` with no assumptions about the monorepo
+root, fixture-based `node --test` tests (no new test-framework
+dependency) rather than anything requiring a live backend.
+
 ### The dependency graph
 
 `components/graph/` is a real graph view, not text pill lists: `JobDetail`
@@ -522,7 +590,7 @@ The dependency direction matters: `Terminology` is defined in
 `model/types.ts`, not in `config/`, because `compute.ts` is what actually
 turns state into sentences (e.g. "Failed and is blocking 2 other
 pipelines") — the model owns the vocabulary its own copy is built from.
-`config/types.ts` imports `Terminology` from `@/model`; the model never
+`config/types.ts` imports `Terminology` from `../model`; the model never
 imports from `config/`.
 
 **`TenantCopy` (`config/types.ts`) is where UI-chrome strings live that

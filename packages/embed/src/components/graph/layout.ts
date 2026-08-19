@@ -1,6 +1,6 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type { DependencyGraph, Severity } from "@/model";
+import type { DependencyGraph, Severity } from "../../model";
 
 /**
  * Real dependency chains can be a handful of hops (most scopes) or dozens

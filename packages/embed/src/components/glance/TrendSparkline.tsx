@@ -1,4 +1,4 @@
-import type { TrendPoint } from "@/model";
+import type { TrendPoint } from "../../model";
 import { formatShortDate } from "./format";
 
 /**

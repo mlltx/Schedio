@@ -2,8 +2,8 @@
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
 import { ExternalLink, Waypoints } from "lucide-react";
-import { getJobDetail, mockConnector, resolvePollIntervalMs, type ConnectorFn, type RunStatus, type Terminology } from "@/model";
-import { useTenantConfig } from "@/config/TenantConfigProvider";
+import { getJobDetail, mockConnector, resolvePollIntervalMs, type ConnectorFn, type RunStatus, type Terminology } from "../../model";
+import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
 import { usePromise } from "./usePromise";
 import { cx } from "./cx";

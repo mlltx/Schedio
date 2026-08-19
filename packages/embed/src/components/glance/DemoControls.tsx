@@ -1,4 +1,6 @@
-import type { Scope } from "@/model";
+"use client";
+
+import type { Scope } from "../../model";
 
 /**
  * A real product wouldn't ship a button that unplugs its own data source —

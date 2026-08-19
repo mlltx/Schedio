@@ -9,7 +9,7 @@ import {
   Unplug,
   type LucideIcon,
 } from "lucide-react";
-import type { HeadlineKind, Severity } from "@/model";
+import type { HeadlineKind, Severity } from "../../model";
 
 /**
  * One place for what each state looks like, so a color never means two

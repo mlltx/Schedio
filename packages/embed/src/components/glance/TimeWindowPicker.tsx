@@ -1,4 +1,6 @@
-import type { TimeWindow } from "@/model";
+"use client";
+
+import type { TimeWindow } from "../../model";
 
 const OPTIONS: { value: TimeWindow; label: string }[] = [
   { value: "since_midnight", label: "Since midnight" },

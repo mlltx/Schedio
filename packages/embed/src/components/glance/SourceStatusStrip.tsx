@@ -1,4 +1,4 @@
-import type { SourceStatus } from "@/model";
+import type { SourceStatus } from "../../model";
 import { SEVERITY_VISUAL } from "./visuals";
 
 /**

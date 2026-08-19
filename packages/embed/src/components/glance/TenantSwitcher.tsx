@@ -1,6 +1,6 @@
 "use client";
 
-import type { TenantConfig } from "@/config/types";
+import type { TenantConfig } from "../../config/types";
 
 /**
  * Fully controlled — this component has no opinion about *where* the list

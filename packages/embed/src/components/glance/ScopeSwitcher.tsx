@@ -12,8 +12,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
-import type { HeadlineKind, Scope } from "@/model";
-import { useTenantConfig } from "@/config/TenantConfigProvider";
+import type { HeadlineKind, Scope } from "../../model";
+import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { HEADLINE_VISUAL } from "./visuals";
 import { cx } from "./cx";
 import { computePopoverPosition, type PopoverPosition } from "./popoverPosition";

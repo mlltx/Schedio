@@ -16,6 +16,9 @@ schedio/embed dist/index.js` after a build turns up nothing).
 npm install @schedio/connector-airflow @schedio/embed
 ```
 
+Prefer to vendor the source instead of depending on a package? This one's
+the easy case — see [`VENDORING.md`](../../VENDORING.md) at the repo root.
+
 ## Quick start
 
 ```ts

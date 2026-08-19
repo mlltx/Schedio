@@ -1,4 +1,4 @@
-import type { JobStatus, Terminology } from "@/model";
+import type { JobStatus, Terminology } from "../../model";
 import { ExceptionRow } from "./ExceptionRow";
 import type { JobNavigation } from "./navigation";
 

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import type { JobStatus, Terminology } from "@/model";
+import type { JobStatus, Terminology } from "../../model";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
 import { NavLink } from "./NavLink";
 import type { JobNavigation } from "./navigation";

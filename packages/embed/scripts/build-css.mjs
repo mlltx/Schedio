@@ -6,6 +6,14 @@
 // similar) prefix on every utility class in every component, which isn't
 // worth the churn/risk for what's fundamentally a "don't leak into the
 // host page" concern rather than a naming concern.
+//
+// Self-contained on purpose: reads only from this package's own src/,
+// writes only to this package's own dist/, and every dependency it needs
+// (postcss, @tailwindcss/postcss, postcss-prefix-selector) is already a
+// devDependency of this package — nothing here assumes the monorepo root.
+// That's deliberate: this script (and its `npm run build:css` entry
+// point) is exactly what a team vendoring this package's source should
+// run to get correctly-scoped CSS — see ../VENDORING.md.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";

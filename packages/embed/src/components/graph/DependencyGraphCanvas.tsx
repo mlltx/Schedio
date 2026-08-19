@@ -5,7 +5,7 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow, type 
 // React Flow's base styles are pulled in via src/styles.css -> dist/style.css
 // (already scoped under .schedio-embed-root by build-css.mjs) — importing
 // them again here would leak an unscoped copy straight onto the host page.
-import type { DependencyGraph } from "@/model";
+import type { DependencyGraph } from "../../model";
 import { GraphJobNode } from "./GraphJobNode";
 import { applyGraphOverlay, computeGraphLayout } from "./layout";
 import { cx } from "../glance/cx";

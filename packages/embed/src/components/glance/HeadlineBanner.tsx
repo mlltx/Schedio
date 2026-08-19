@@ -1,4 +1,4 @@
-import type { ScopeStatus } from "@/model";
+import type { ScopeStatus } from "../../model";
 import { HEADLINE_VISUAL } from "./visuals";
 import { TrendSparkline } from "./TrendSparkline";
 import { Heading, type HeadingLevel } from "./Heading";

@@ -1,4 +1,4 @@
-import type { Terminology } from "@/model";
+import type { Terminology } from "../model";
 
 /**
  * A deployment's identity: what to call this product and the things in it,
