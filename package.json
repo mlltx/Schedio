@@ -1,0 +1,8 @@
+{
+  "name": "schedio",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "web"
+  ]
+}

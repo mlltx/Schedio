@@ -1,0 +1,37 @@
+{
+  "name": "@schedio/connector-airflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schedio connector for Apache Airflow 3 — maps one or more Airflow instances into Schedio's model via the REST API. Depends on nothing but fetch; @schedio/embed is a type-only dependency.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx src/__tests__/*.test.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@schedio/embed": "*",
+    "@types/node": "^20",
+    "eslint": "^9",
+    "tsup": "^8",
+    "tsx": "^4",
+    "typescript": "^5",
+    "typescript-eslint": "^8"
+  }
+}

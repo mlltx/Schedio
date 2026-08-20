@@ -1,0 +1,57 @@
+{
+  "name": "@schedio/embed",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schedio's glance view and job detail as a reusable React component — the model layer plus the UI, embeddable in any React or Next.js app.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "require": "./dist/server.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:js && npm run build:css",
+    "build:js": "tsup",
+    "build:css": "node scripts/build-css.mjs",
+    "dev": "tsup --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "@xyflow/react": "^12.11.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^5",
+    "postcss": "^8",
+    "postcss-prefix-selector": "^2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwindcss": "^4",
+    "tsup": "^8",
+    "typescript": "^5",
+    "typescript-eslint": "^8"
+  }
+}

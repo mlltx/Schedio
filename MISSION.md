@@ -20,6 +20,13 @@ another engine. We are building:
 Connectors to real schedulers (Airflow, Kubernetes, Argo, Dagster, Temporal,
 Prefect, etc.) exist to feed the model. They are not the product.
 
+Schedio ships in two forms from the same source: a hosted app people visit
+directly, and `@schedio/embed`, a React/Next.js component a team drops into
+a site they already have. Neither is a special case of the other — the
+hosted app is just the component with our own chrome and demo data around
+it (see `web/`'s `GlanceViewConnected` for exactly how thin that wrapper
+is).
+
 ## Who we're building it for
 
 Less-technical users — ops, support, leadership, anyone who needs to answer
@@ -54,6 +61,31 @@ onboarding open this and understand system health in ten seconds?
 - **Plain language over jargon.** Status, errors, and structure should read
   in human terms. Progressive disclosure for technical detail — logs, code,
   configs are available but never front-and-center.
+
+- **White-label by design, from the start.** A team should be able to make
+  Schedio look and read like theirs — their name, their color, their words
+  for "job" or "run" — without forking the codebase or hand-editing
+  component strings. Branding and terminology are configuration, injected
+  through one boundary, the same way a connector injects data through the
+  model boundary. If adding a feature means a new hardcoded string in a
+  component, ask whether it belongs in that config instead.
+
+  This has a limit: the *severity* palette (healthy/critical/etc.) stays
+  fixed by default. Comprehension depends on color meaning the same thing
+  everywhere a team might look at Schedio together — a color system that
+  changes per tenant is a worse product than one brand accent that does.
+  Brand color styles the chrome; it doesn't get to relabel what "red" means.
+
+- **Embeddable by construction, not by exception.** A team with their own
+  site should be able to drop Schedio into it and have it feel like theirs,
+  not like a foreign iframe. That means the component layer (`@schedio/embed`)
+  can never assume it owns the page: no hardcoded routing (navigation is
+  always a prop the host controls), no assumption about what data source is
+  live (a `connector` is always injectable, defaulting to the mock one), and
+  no styles that leak onto — or absorb bleed from — the host's own page.
+  When in doubt: would this line of code still make sense if `@schedio/embed`
+  were rendered inside someone else's Next.js app right now, not ours? If
+  not, it's a `web/`-level concern, not a component-level one.
 
 - **Read-first, write-second.** Nail visualization, monitoring, and trust
   before tackling triggering or editing runs through the UI. Writes, when
