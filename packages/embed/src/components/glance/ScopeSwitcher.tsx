@@ -11,7 +11,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Search } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "./icons";
 import type { HeadlineKind, Scope } from "../../model";
 import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { HEADLINE_VISUAL } from "./visuals";
@@ -282,7 +282,7 @@ function TeamScopePicker({
         <span className="truncate">
           {selected ? selected.name : `${tenant.copy.scopesLabel} (${teamScopes.length})`}
         </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+        <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
       </button>
 
       {mounted &&
@@ -314,7 +314,7 @@ function TeamScopePicker({
             } as CSSProperties}
           >
             <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2 dark:border-zinc-900">
-              <Search className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
+              <SearchIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden />
               <input
                 ref={inputRef}
                 role="combobox"
@@ -355,7 +355,7 @@ function TeamScopePicker({
                     >
                       {visual && <span className={cx("h-1.5 w-1.5 shrink-0 rounded-full", visual.dot)} />}
                       <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{scope.name}</span>
-                      {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" aria-hidden />}
+                      {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" aria-hidden />}
                     </button>
                   );
                 })

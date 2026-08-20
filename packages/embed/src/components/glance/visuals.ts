@@ -1,14 +1,14 @@
 import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Moon,
-  OctagonAlert,
-  RefreshCw,
-  Sparkles,
-  Unplug,
-  type LucideIcon,
-} from "lucide-react";
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  ClockIcon,
+  MoonIcon,
+  OctagonAlertIcon,
+  RefreshCwIcon,
+  SparklesIcon,
+  UnplugIcon,
+  type IconComponent,
+} from "./icons";
 import type { HeadlineKind, Severity } from "../../model";
 
 /**
@@ -23,7 +23,7 @@ export interface Visual {
   bannerBg: string;
   bannerBorder: string;
   bannerText: string;
-  icon: LucideIcon;
+  icon: IconComponent;
 }
 
 const emerald: Visual = {
@@ -33,7 +33,7 @@ const emerald: Visual = {
   bannerBg: "bg-emerald-50 dark:bg-emerald-950/40",
   bannerBorder: "border-emerald-200 dark:border-emerald-900",
   bannerText: "text-emerald-900 dark:text-emerald-100",
-  icon: CheckCircle2,
+  icon: CheckCircle2Icon,
 };
 
 const red: Visual = {
@@ -43,7 +43,7 @@ const red: Visual = {
   bannerBg: "bg-red-50 dark:bg-red-950/40",
   bannerBorder: "border-red-200 dark:border-red-900",
   bannerText: "text-red-900 dark:text-red-100",
-  icon: OctagonAlert,
+  icon: OctagonAlertIcon,
 };
 
 const orange: Visual = {
@@ -53,7 +53,7 @@ const orange: Visual = {
   bannerBg: "bg-orange-50 dark:bg-orange-950/40",
   bannerBorder: "border-orange-200 dark:border-orange-900",
   bannerText: "text-orange-900 dark:text-orange-100",
-  icon: AlertTriangle,
+  icon: AlertTriangleIcon,
 };
 
 const amber: Visual = {
@@ -63,7 +63,7 @@ const amber: Visual = {
   bannerBg: "bg-amber-50 dark:bg-amber-950/40",
   bannerBorder: "border-amber-200 dark:border-amber-900",
   bannerText: "text-amber-900 dark:text-amber-100",
-  icon: Clock,
+  icon: ClockIcon,
 };
 
 const blue: Visual = {
@@ -73,7 +73,7 @@ const blue: Visual = {
   bannerBg: "bg-blue-50 dark:bg-blue-950/40",
   bannerBorder: "border-blue-200 dark:border-blue-900",
   bannerText: "text-blue-900 dark:text-blue-100",
-  icon: RefreshCw,
+  icon: RefreshCwIcon,
 };
 
 const zinc: Visual = {
@@ -83,7 +83,7 @@ const zinc: Visual = {
   bannerBg: "bg-zinc-100 dark:bg-zinc-900",
   bannerBorder: "border-zinc-300 dark:border-zinc-700 border-dashed",
   bannerText: "text-zinc-700 dark:text-zinc-300",
-  icon: Unplug,
+  icon: UnplugIcon,
 };
 
 const sky: Visual = {
@@ -93,13 +93,13 @@ const sky: Visual = {
   bannerBg: "bg-sky-50 dark:bg-sky-950/40",
   bannerBorder: "border-sky-200 dark:border-sky-900",
   bannerText: "text-sky-900 dark:text-sky-100",
-  icon: Moon,
+  icon: MoonIcon,
 };
 
 // Same neutral coloring as "unreachable", but a distinct icon — this is
 // "nothing has come in yet" (newly connected), not "we lost contact with a
 // source that used to report", and those shouldn't look identical.
-const zincNoData: Visual = { ...zinc, icon: Sparkles };
+const zincNoData: Visual = { ...zinc, icon: SparklesIcon };
 
 export const SEVERITY_VISUAL: Record<Severity, Visual> = {
   healthy: emerald,

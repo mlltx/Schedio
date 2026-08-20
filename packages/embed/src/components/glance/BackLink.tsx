@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeftIcon } from "./icons";
 import { NavLink } from "./NavLink";
 import { cx } from "./cx";
 
@@ -26,7 +26,7 @@ export function BackLink({
         className,
       )}
     >
-      <ArrowLeft className="h-4 w-4" aria-hidden />
+      <ArrowLeftIcon className="h-4 w-4" aria-hidden />
       {label}
     </NavLink>
   );

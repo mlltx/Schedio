@@ -1,6 +1,6 @@
-import { ChevronRight } from "lucide-react";
 import type { JobStatus, Terminology } from "../../model";
 import { SEVERITY_LABEL, SEVERITY_VISUAL } from "./visuals";
+import { ChevronRightIcon } from "./icons";
 import { NavLink } from "./NavLink";
 import type { JobNavigation } from "./navigation";
 
@@ -39,7 +39,7 @@ export function ExceptionRow({
       <span className="hidden shrink-0 text-xs font-medium text-zinc-400 sm:block">
         {SEVERITY_LABEL[status.severity]}
       </span>
-      <ChevronRight
+      <ChevronRightIcon
         className="h-4 w-4 shrink-0 text-zinc-300 transition-transform group-hover:translate-x-0.5 dark:text-zinc-600"
         aria-hidden
       />

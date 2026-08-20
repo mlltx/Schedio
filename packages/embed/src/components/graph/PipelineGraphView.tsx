@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Search, Waypoints } from "lucide-react";
+import { SearchIcon, WaypointsIcon } from "../glance/icons";
 import {
   getDependencyGraph,
   isNonHealthySeverity,
@@ -214,7 +214,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Waypoints className="h-5 w-5 text-zinc-400 dark:text-zinc-500" aria-hidden />
+          <WaypointsIcon className="h-5 w-5 text-zinc-400 dark:text-zinc-500" aria-hidden />
           <Heading level={headingLevel} className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-zinc-50">
             {tenant.copy.fullPipelineHeading}
             <span className="ml-2 font-normal text-zinc-400 dark:text-zinc-500">
@@ -225,7 +225,7 @@ export const PipelineGraphView = forwardRef<HTMLDivElement, PipelineGraphViewPro
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" aria-hidden />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" aria-hidden />
             <input
               ref={searchInputRef}
               type="text"

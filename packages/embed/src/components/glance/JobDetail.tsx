@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef, type CSSProperties, type ReactNode } from "react";
-import { ExternalLink, Waypoints } from "lucide-react";
 import { getJobDetail, mockConnector, resolvePollIntervalMs, type ConnectorFn, type RunStatus, type Terminology } from "../../model";
 import { useTenantConfig } from "../../config/TenantConfigProvider";
 import { SEVERITY_LABEL, SEVERITY_VISUAL, type Visual } from "./visuals";
@@ -14,6 +13,7 @@ import { DependencyGraphCanvas } from "../graph/DependencyGraphCanvas";
 import type { JobNavigation } from "./navigation";
 import { Heading, type HeadingLevel } from "./Heading";
 import { useResolvedColorScheme, colorSchemeClassName, type ColorScheme } from "./colorScheme";
+import { ExternalLinkIcon, WaypointsIcon } from "./icons";
 
 const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   success: "Succeeded",
@@ -161,7 +161,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
               rel="noopener noreferrer"
               className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
-              <ExternalLink className="h-3 w-3" aria-hidden />
+              <ExternalLinkIcon className="h-3 w-3" aria-hidden />
               Open in {job.sourceLabel ?? tenant.copy.genericSourceLabel}
             </a>
           )}
@@ -211,7 +211,7 @@ export const JobDetail = forwardRef<HTMLDivElement, JobDetailProps>(function Job
                 onActivate={onViewPipeline ? () => onViewPipeline(job.jobId) : undefined}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
               >
-                <Waypoints className="h-3.5 w-3.5" aria-hidden />
+                <WaypointsIcon className="h-3.5 w-3.5" aria-hidden />
                 {tenant.copy.viewFullPipeline}
               </NavLink>
             )}

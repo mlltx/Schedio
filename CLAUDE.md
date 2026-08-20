@@ -539,6 +539,32 @@ connector package: `import type` only against `@schedio/embed`, own
 root, fixture-based `node --test` tests (no new test-framework
 dependency) rather than anything requiring a live backend.
 
+### Keep dependencies sharp
+
+Every `dependency` in `packages/embed/package.json` becomes something a
+vendoring team has to `npm install`, and something an embedding host's
+bundler has to resolve and potentially deduplicate against their own
+copy — not a big deal for `@dagrejs/dagre`/`@xyflow/react` (real,
+substantial functionality that isn't reasonable to hand-roll), but not
+free either. Before adding a new `dependency` (not `devDependency` —
+those never reach a consumer), ask whether this package actually needs
+the *library*, or just a small, stable slice of what it does.
+
+**`lucide-react` was removed for exactly this reason.** It was a real
+`dependency` (not tree-shaken away — tsup leaves `dependencies` external
+by default, so it was a genuine transitive install for every consumer)
+that existed for 15 icons out of its 1000+ (~40MB installed). Those 15
+are now `components/glance/icons.tsx` — plain function components, path
+data copied verbatim from the installed package (ISC-licensed) so they
+render pixel-identically, no wrapper library involved. If you need a new
+icon: copy its path data into `icons.tsx` the same way (open the icon on
+lucide.dev or grep `node_modules/lucide-react/dist/esm/icons/` for a
+local install) rather than reintroducing the dependency for one icon.
+This isn't a blanket "never add an icon library" rule — it's specific to
+this package's own low bar for what a `dependency` costs a downstream
+consumer; `web/`'s own chrome has no such constraint and can pull in
+whatever it wants.
+
 ### The dependency graph
 
 `components/graph/` is a real graph view, not text pill lists: `JobDetail`
@@ -562,9 +588,17 @@ introduces zero new colors or vocabulary to learn.
 Two dependencies exist solely for this: `@dagrejs/dagre` (auto-layout —
 hand-computed columns don't hold up once a pipeline is more than a few
 hops) and `@xyflow/react` (pan/zoom/render). Both are regular
-`dependencies` in `packages/embed/package.json`, like `lucide-react`
-already was — tsup leaves them external and `npm install`ing
-`@schedio/embed` pulls them in transitively, nothing extra for a host.
+`dependencies` in `packages/embed/package.json` — tsup leaves
+`dependencies`/`peerDependencies` external by default (only `react`/
+`react-dom` are listed in `tsup.config.ts`'s `external` explicitly, and
+don't need to be since they're peers already), so `npm install`ing
+`@schedio/embed` pulls these two in transitively, nothing extra for a
+host to configure. Both are justified the same way: hand-rolling a
+graph auto-layout algorithm or a pan/zoom canvas isn't a reasonable
+in-house alternative. Compare `lucide-react`, which used to be a
+`dependency` here purely for 15 icons out of its 1000+ (~40MB installed)
+— that's the kind of dependency this package tries not to carry. It's
+gone now; see "Keep dependencies sharp" below.
 `PipelineGraphView` defaults to auto-focusing the camera on whatever's
 broken (plus one hop of context) rather than fitting the whole graph once
 a pipeline passes ~15 jobs — see `seed-data.ts`'s "Core Platform" scope (a
